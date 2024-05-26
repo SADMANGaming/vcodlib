@@ -1,6 +1,7 @@
 # Server extension for Call of Duty 1 (2003)
 ### Adding security, fixes, and features
 Supported patches: **1.1**, **1.5**
+Modified libcod1 project!
 ___
 ### Installation and usage
 See the [Wiki](https://github.com/cod1dev/libcod1/wiki)
