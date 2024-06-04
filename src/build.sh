@@ -132,9 +132,6 @@ $cc $debug $options $constants -c gsc_utils.cpp -o objects_$1/gsc_utils.opp
 echo "##### COMPILE $1 GSC_WEAPONS.CPP #####"
 $cc $debug $options $constants -c gsc_weapons.cpp -o objects_$1/gsc_weapons.opp
 
-echo "##### COMPILE $1 GSC_EMOJI.C #####"
-$cc $debug $options $constants -c gsc_emoji.cpp -o objects_"$1"/gsc_emoji.opp
-
 if [ $patch == 1.5 ]; then
     echo "##### COMPILE $1 JUMP.CPP #####"
     $cc $debug $options $constants -c jump.cpp -o objects_"$1"/jump.opp
