@@ -6,6 +6,14 @@
 
 scr_function_t scriptFunctions[] =
 {
+    #if ENABLE_UNSAFE == 1
+    {"file_exists", gsc_utils_file_exists, 0},
+    {"fopen", gsc_utils_fopen, 0},
+    {"fwrite", gsc_utils_fwrite, 0},
+    {"fread", gsc_utils_fread, 0},
+    {"fclose", gsc_utils_fclose, 0},
+    #endif
+
     #if COMPILE_SQLITE == 1
     {"sqlite_open", gsc_sqlite_open, 0},
     {"sqlite_query", gsc_sqlite_query, 0},
@@ -20,7 +28,6 @@ scr_function_t scriptFunctions[] =
     #endif
 
     {"sendCommandToClient", gsc_utils_sendcommandtoclient, 0},
-
     {"logPrintConsole", gsc_utils_logprintconsole, 0},
     {"getSubStr", gsc_utils_getsubstr, 0, },
     {"getAscii", gsc_utils_getascii, 0},
@@ -28,20 +35,16 @@ scr_function_t scriptFunctions[] =
     {"toLower", gsc_utils_tolower, 0},
     {"strtok", gsc_utils_strtok, 0},
     {"replace", gsc_utils_replace, 0},
-
-    #if ENABLE_UNSAFE == 1
-    {"file_exists", gsc_utils_file_exists, 0},
-    {"fopen", gsc_utils_fopen, 0},
-    {"fwrite", gsc_utils_fwrite, 0},
-    {"fread", gsc_utils_fread, 0},
-    {"fclose", gsc_utils_fclose, 0},
-    #endif
-
     {"getSystemTime", gsc_utils_getsystemtime, 0},
-    
     {"getConfigString", gsc_utils_getconfigstring, 0},
     {"makeLocalizedString", gsc_utils_makelocalizedstring, 0},
 
+    // Weapons
+    {"setWeaponCookable", gsc_weapons_setweaponcookable, 0},
+    {"setWeaponFuseTime", gsc_weapons_setweaponfusetime, 0},
+    //
+
+    {"testFunction", gsc_testfunction, 0},
     {NULL, NULL, 0} // Terminator
 };
 
@@ -67,13 +70,13 @@ xfunction_t Scr_GetCustomFunction(const char **fname, int *fdev)
 
 scr_method_t scriptMethods[] =
 {
-    {"showToPlayer", gsc_entity_showtoplayer, 0},
-
     #if COMPILE_SQLITE == 1
     {"async_sqlite_create_entity_query", gsc_async_sqlite_create_entity_query, 0},
     {"async_sqlite_create_entity_query_nosave", gsc_async_sqlite_create_entity_query_nosave, 0},
     #endif
 
+    {"setBounds", gsc_entity_setbounds, 0},
+    {"showToPlayer", gsc_entity_showtoplayer, 0},
     {"setVelocity", gsc_player_setvelocity, 0},
     {"getVelocity", gsc_player_getvelocity, 0},
     {"aimButtonPressed", gsc_player_button_ads, 0},
@@ -97,9 +100,7 @@ scr_method_t scriptMethods[] =
     {"setSpeed", gsc_player_setspeed, 0},
     {"getFPS", gsc_player_getfps, 0},
 
-
-    //{"testCommand", gsc_testcommand, 0},
-
+    {"testMethod", gsc_testmethod, 0},
     {NULL, NULL, 0} // Terminator
 };
 
@@ -403,10 +404,15 @@ uint64_t Sys_Milliseconds64(void)
 }
 
 
-
-/*
-void gsc_testcommand(scr_entref_t ref)
+// For tests
+void gsc_testfunction()
 {
+    printf("##### gsc_testfunction \n");
+}
+void gsc_testmethod(scr_entref_t ref)
+{
+    printf("##### gsc_testmethod \n");
+
     int id = ref.entnum;
 
     if ( id >= MAX_CLIENTS )
@@ -417,7 +423,6 @@ void gsc_testcommand(scr_entref_t ref)
     }
 
     //client_t* client = &svs.clients[id];
-    gentity_t* gentity = &g_entities[id];
-
-    printf("####### currentOrigin = %f, %f, %f \n", gentity->r.currentOrigin[0], gentity->r.currentOrigin[1], gentity->r.currentOrigin[2]);
-}*/
+    //gentity_t* gentity = &g_entities[id];
+    //printf("####### currentOrigin = %f, %f, %f \n", gentity->r.currentOrigin[0], gentity->r.currentOrigin[1], gentity->r.currentOrigin[2]);
+}

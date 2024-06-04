@@ -78,12 +78,13 @@ Scr_ExecEntThreadNum_t Scr_ExecEntThreadNum;
 Scr_FreeThread_t Scr_FreeThread;
 Scr_Error_t Scr_Error;
 G_Say_t G_Say;
+G_RegisterCvars_t G_RegisterCvars;
 SV_GetConfigstringConst_t SV_GetConfigstringConst;
 SV_GetConfigstring_t SV_GetConfigstring;
-#if COD_VERSION == COD1_1_5
+BG_GetNumWeapons_t BG_GetNumWeapons;
 BG_GetInfoForWeapon_t BG_GetInfoForWeapon;
-#endif
 BG_GetWeaponIndexForName_t BG_GetWeaponIndexForName;
+BG_AnimationIndexForString_t BG_AnimationIndexForString;
 Scr_IsSystemActive_t Scr_IsSystemActive;
 Scr_GetInt_t Scr_GetInt;
 Scr_GetString_t Scr_GetString;
@@ -237,21 +238,26 @@ void custom_Com_Init(char *commandLine)
     sv_serverid = Cvar_FindVar("sv_serverid");
 
     // Register custom cvars
-    Cvar_Get("libcod", "1", CVAR_SERVERINFO);
-
+    Cvar_Get("vcodlib", "1", CVAR_SERVERINFO);
     fs_callbacks = Cvar_Get("fs_callbacks", "", CVAR_ARCHIVE);
-#if COD_VERSION == COD1_1_1
-    g_deadChat = Cvar_Get("g_deadChat", "0", CVAR_ARCHIVE);
-#endif
     g_debugCallbacks = Cvar_Get("g_debugCallbacks", "0", CVAR_ARCHIVE);
-#if COD_VERSION == COD1_1_5
-    g_legacyStyle = Cvar_Get("g_legacyStyle", "0", CVAR_SYSTEMINFO | CVAR_ARCHIVE);
-#endif
+    sv_cracked = Cvar_Get("sv_cracked", "0", CVAR_ARCHIVE);
+#if COD_VERSION == COD1_1_1
+    Cvar_Get("sv_wwwDownload", "0", CVAR_SYSTEMINFO | CVAR_ARCHIVE);
+    Cvar_Get("sv_wwwBaseURL", "", CVAR_SYSTEMINFO | CVAR_ARCHIVE);
+    
+    /*
+    Force cl_allowDownload on client, otherwise 1.1x can't download to join the server
+    I don't want to force download, I would prefer this to be temporary and stop forcing later when a solution is found
+    */
+    Cvar_Get("cl_allowDownload", "1", CVAR_SYSTEMINFO);
+
+    g_deadChat = Cvar_Get("g_deadChat", "0", CVAR_ARCHIVE);
     g_playerEject = Cvar_Get("g_playerEject", "1", CVAR_ARCHIVE);
-#if COD_VERSION == COD1_1_5
+#elif COD_VERSION == COD1_1_5
+    g_legacyStyle = Cvar_Get("g_legacyStyle", "0", CVAR_SYSTEMINFO | CVAR_ARCHIVE);
     jump_slowdownEnable =  Cvar_Get("jump_slowdownEnable", "1", CVAR_SYSTEMINFO | CVAR_ARCHIVE);
 #endif
-    sv_cracked = Cvar_Get("sv_cracked", "0", CVAR_ARCHIVE);
 }
 
 #if COD_VERSION == COD1_1_1
@@ -392,7 +398,7 @@ int custom_G_LocalizedStringIndex(const char *string)
 
 void hook_ClientCommand(int clientNum)
 {
-    if ( !Scr_IsSystemActive() )
+    if(!Scr_IsSystemActive())
         return;
 
 #if COD_VERSION == COD1_1_1
@@ -401,21 +407,22 @@ void hook_ClientCommand(int clientNum)
         return; // Prevent server crash
 #endif
       
-    if ( !codecallback_playercommand )
-    {	ClientCommand(clientNum);
+    if(!codecallback_playercommand)
+    {
+        ClientCommand(clientNum);
         return;
     }
 
     stackPushArray();
     int args = Cmd_Argc();
-    for ( int i = 0; i < args; i++ )
+    for(int i = 0; i < args; i++)
     {
         char tmp[MAX_STRINGLENGTH];
         SV_Cmd_ArgvBuffer(i, tmp, sizeof(tmp));
-        if( i == 1 && tmp[0] >= 20 && tmp[0] <= 22 )
+        if(i == 1 && tmp[0] >= 20 && tmp[0] <= 22)
         {
             char *part = strtok(tmp + 1, " ");
-            while( part != NULL )
+            while(part != NULL)
             {
                 stackPushString(part);
                 stackPushArrayLast();
@@ -436,7 +443,7 @@ void hook_ClientCommand(int clientNum)
 const char* hook_AuthorizeState(int arg)
 {
     const char* s = Cmd_Argv(arg);
-    if (sv_cracked->integer && !strcmp(s, "deny"))
+    if(sv_cracked->integer && !strcmp(s, "deny"))
         return "accept";
     return s;
 }
@@ -450,7 +457,7 @@ void custom_SV_SpawnServer(char *server)
     hook_sv_spawnserver->hook();
 
 #if COD_VERSION == COD1_1_5
-    if (weapons_properties.empty())
+    if(weapons_properties.empty())
     {
         weapons_properties["kar98k_sniper_mp"]["default"] = { 199, 449, 0.1, 0.6, 0.2, 0, 1.2, 1.4 };
         weapons_properties["kar98k_sniper_mp"]["legacy"] = { 199, 299, 0.42, 0.2, 0.085, 1, 0, 0 };
@@ -481,24 +488,24 @@ void custom_SV_SendClientGameState(client_t *client)
     void (*SV_SendClientGameState)(client_t *client);
     *(int *)&SV_SendClientGameState = hook_sv_sendclientgamestate->from;
     SV_SendClientGameState(client);
-	hook_sv_sendclientgamestate->hook();
+    hook_sv_sendclientgamestate->hook();
 
     // Reset custom player state to default values
     int id = client - svs.clients;
-	memset(&customPlayerState[id], 0, sizeof(customPlayerState_t));
+    memset(&customPlayerState[id], 0, sizeof(customPlayerState_t));
 }
 
 qboolean hook_StuckInClient(gentity_s *self)
 {
-    if (!g_playerEject->integer)
-		return qfalse;
+    if(!g_playerEject->integer)
+        return qfalse;
     return StuckInClient(self);
 }
 
 qboolean ShouldServeFile(const char *requestedFilePath)
 {
     static char localFilePath[MAX_OSPATH*2+5];
-    searchpath_t *search;
+    searchpath_t* search;
 
     localFilePath[0] = 0;
 
@@ -507,9 +514,9 @@ qboolean ShouldServeFile(const char *requestedFilePath)
         if(search->pak)
         {
             snprintf(localFilePath, sizeof(localFilePath), "%s/%s.pk3", search->pak->pakGamename, search->pak->pakBasename);
-            if (!strcmp(localFilePath, requestedFilePath))
+            if(!strcmp(localFilePath, requestedFilePath))
                 if(!FS_svrPak(search->pak->pakBasename))
-                        return qtrue;
+                    return qtrue;
         }
     }
     return qfalse;
@@ -537,6 +544,69 @@ void custom_SV_BeginDownload_f(client_t *cl)
     SV_BeginDownload_f(cl);
     hook_sv_begindownload_f->hook();
 }
+
+#if COD_VERSION == COD1_1_1
+void custom_SV_ExecuteClientMessage(client_t *cl, msg_t *msg)
+{
+    byte msgBuf[MAX_MSGLEN];
+    msg_t decompressMsg;
+    int c;
+
+    MSG_Init(&decompressMsg, msgBuf, sizeof(msgBuf));
+    decompressMsg.cursize = MSG_ReadBitsCompress(&msg->data[msg->readcount], msgBuf, msg->cursize - msg->readcount);
+    
+    if ((cl->serverId == sv_serverId_value || cl->downloadName[0])
+        || (!cl->downloadName[0] && strstr(cl->lastClientCommandString, "nextdl")))
+    {
+        do {
+            c = MSG_ReadBits(&decompressMsg, 2);
+            if (c == clc_EOF || c != clc_clientCommand)
+            {
+                if(sv_pure->integer && cl->pureAuthentic == 2)
+                {
+                    cl->nextSnapshotTime = -1;
+                    SV_DropClient(cl, "EXE_UNPURECLIENTDETECTED");
+                    cl->state = CS_ACTIVE;
+                    SV_SendClientSnapshot(cl);
+                    cl->state = CS_ZOMBIE;
+                }
+                if(c == clc_move)
+                {
+                    SV_UserMove(cl, &decompressMsg, 1);
+                }
+                else if(c == clc_moveNoDelta)
+                {
+                    SV_UserMove(cl, &decompressMsg, 0);
+                }
+                else if(c != clc_EOF)
+                {
+                    Com_Printf("WARNING: bad command byte %i for client %i\n", c, cl - svs.clients);
+                }
+                return;
+            }
+
+            if (!SV_ClientCommand(cl, &decompressMsg))
+                return;
+
+        } while (cl->state != CS_ZOMBIE);
+    }
+    else if((cl->serverId & 0xF0) == (sv_serverId_value & 0xF0))
+    {
+        if (cl->state == CS_PRIMED)
+        {
+            SV_ClientEnterWorld(cl, &cl->lastUsercmd);
+        }
+    }
+    else
+    {
+        if(cl->gamestateMessageNum < cl->messageAcknowledge)
+        {
+            Com_DPrintf("%s : dropped gamestate, resending\n", cl->name);
+            SV_SendClientGameState(cl);
+        }
+    }
+}
+#endif
 
 #if COD_VERSION == COD1_1_5
 void custom_SV_MapRestart_f(void)
@@ -588,39 +658,41 @@ void custom_SV_ClientThink(int clientNum)
     void (*ClientThink)(int clientNum);
     *(int *)&ClientThink = hook_play_movement->from;
     ClientThink(clientNum);
-	hook_play_movement->hook();
+    hook_play_movement->hook();
 
-	customPlayerState[clientNum].frames++;
+    customPlayerState[clientNum].frames++;
 
     if ( Sys_Milliseconds64() - customPlayerState[clientNum].frameTime >= 1000 )
-	{
-		if ( customPlayerState[clientNum].frames > 1000 )
-			customPlayerState[clientNum].frames = 1000;
+    {
+        if ( customPlayerState[clientNum].frames > 1000 )
+            customPlayerState[clientNum].frames = 1000;
 
-		customPlayerState[clientNum].fps = customPlayerState[clientNum].frames;
-		customPlayerState[clientNum].frameTime = Sys_Milliseconds64();
-		customPlayerState[clientNum].frames = 0;
-	}
+        customPlayerState[clientNum].fps = customPlayerState[clientNum].frames;
+        customPlayerState[clientNum].frameTime = Sys_Milliseconds64();
+        customPlayerState[clientNum].frames = 0;
+    }
 }
 
+#if COD_VERSION == COD1_1_1
 int custom_ClientEndFrame(gentity_t *ent)
 {
     hook_clientendframe->unhook();
-	int (*ClientEndFrame)(gentity_t *ent);
-	*(int *)&ClientEndFrame = hook_clientendframe->from;
-	int ret = ClientEndFrame(ent);
-	hook_clientendframe->hook();
+    int (*ClientEndFrame)(gentity_t *ent);
+    *(int *)&ClientEndFrame = hook_clientendframe->from;
+    int ret = ClientEndFrame(ent);
+    hook_clientendframe->hook();
 
     if ( ent->client->sess.sessionState == STATE_PLAYING )
-	{
-		int num = ent - g_entities;
+    {
+        int num = ent - g_entities;
 
-		if ( customPlayerState[num].speed > 0 )
-			ent->client->ps.speed = customPlayerState[num].speed;
+        if ( customPlayerState[num].speed > 0 )
+            ent->client->ps.speed = customPlayerState[num].speed;
     }
 
     return ret;
 }
+#endif
 
 // ioquake3 rate limit connectionless requests
 // https://github.com/ioquake/ioq3/blob/master/code/server/sv_main.c
@@ -936,18 +1008,18 @@ void ServerCrash(int sig)
     exit(1);
 }
 
-void *custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int, ...), int (*systemcalls)(int, ...))
+void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int, ...), int (*systemcalls)(int, ...))
 {
     hook_sys_loaddll->unhook();
-    void *(*Sys_LoadDll)(const char *name, char *fqpath, int (**entryPoint)(int, ...), int (*systemcalls)(int, ...));
+    void* (*Sys_LoadDll)(const char *name, char *fqpath, int (**entryPoint)(int, ...), int (*systemcalls)(int, ...));
     *(int *)&Sys_LoadDll = hook_sys_loaddll->from;
-    void *ret = Sys_LoadDll(name, fqpath, entryPoint, systemcalls);
+    void* ret = Sys_LoadDll(name, fqpath, entryPoint, systemcalls);
     hook_sys_loaddll->hook();
 
     // Unprotect the game lib
     char libPath[512];
     cvar_t* fs_game = Cvar_FindVar("fs_game");
-    if (*fs_game->string)
+    if(*fs_game->string)
         sprintf(libPath, "%s/game.mp.i386.so", fs_game->string);
     else
         sprintf(libPath, "main/game.mp.i386.so");
@@ -956,13 +1028,13 @@ void *custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     void *low, *high;
     FILE *fp;
     fp = fopen("/proc/self/maps", "r");
-    if (!fp)
+    if(!fp)
         return 0;
-    while (fgets(buf, sizeof(buf), fp))
+    while(fgets(buf, sizeof(buf), fp))
     {
-        if (!strstr(buf, libPath))
+        if(!strstr(buf, libPath))
             continue;
-        if (sscanf (buf, "%p-%p %4c", &low, &high, flags) != 3)
+        if(sscanf (buf, "%p-%p %4c", &low, &high, flags) != 3)
             continue;
         mprotect((void *)low, (int)high-(int)low, PROT_READ | PROT_WRITE | PROT_EXEC);
     }
@@ -984,12 +1056,13 @@ void *custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     Scr_FreeThread = (Scr_FreeThread_t)dlsym(ret, "Scr_FreeThread");
     Scr_Error = (Scr_Error_t)dlsym(ret, "Scr_Error");
     G_Say = (G_Say_t)dlsym(ret, "G_Say");
+    G_RegisterCvars = (G_RegisterCvars_t)dlsym(ret, "G_RegisterCvars");
     SV_GetConfigstringConst = (SV_GetConfigstringConst_t)dlsym(ret, "trap_GetConfigstringConst");
     SV_GetConfigstring = (SV_GetConfigstring_t)dlsym(ret, "trap_GetConfigstring");
-#if COD_VERSION == COD1_1_5
+    BG_GetNumWeapons = (BG_GetNumWeapons_t)dlsym(ret, "BG_GetNumWeapons");
     BG_GetInfoForWeapon = (BG_GetInfoForWeapon_t)dlsym(ret, "BG_GetInfoForWeapon");
-#endif
     BG_GetWeaponIndexForName = (BG_GetWeaponIndexForName_t)dlsym(ret, "BG_GetWeaponIndexForName");
+    BG_AnimationIndexForString = (BG_AnimationIndexForString_t)dlsym(ret, "BG_AnimationIndexForString");
     Scr_IsSystemActive = (Scr_IsSystemActive_t)dlsym(ret, "Scr_IsSystemActive");
     Scr_GetInt = (Scr_GetInt_t)dlsym(ret, "Scr_GetInt");
     Scr_GetString = (Scr_GetString_t)dlsym(ret, "Scr_GetString");
@@ -1077,12 +1150,16 @@ public:
         setbuf(stdout, NULL);
 
 #if COD_VERSION == COD1_1_1
-        printf("> [LIBCOD] Compiled for: CoD1 1.1\n");
+        printf("> [VCODLIB] Compiled for: CoD1 1.1\n");
+        printf("> [VCODLIB] VCODLIB based on LIBCOD1\n");
+        printf("> [VCODLIB] Special thanks to Raphael\n");
 #elif COD_VERSION == COD1_1_5
-        printf("> [LIBCOD] Compiled for: CoD1 1.5\n");
+        printf("> [VCODLIB] Compiled for: CoD1 1.5\n");
+        printf("> [VCODLIB] VCODLIB based on LIBCOD1\n");
+        printf("> [VCODLIB] Special thanks to Raphael\n");
 #endif
 
-        printf("> [LIBCOD] Compiled %s %s using GCC %s\n", __DATE__, __TIME__, __VERSION__);
+        printf("> [VCODLIB] Compiled %s %s using GCC %s\n", __DATE__, __TIME__, __VERSION__);
 
         // Allow to write in executable memory
         mprotect((void *)0x08048000, 0x135000, PROT_READ | PROT_WRITE | PROT_EXEC);
@@ -1100,6 +1177,7 @@ public:
 
         hook_jmp(0x080717a4, (int)custom_FS_ReferencedPakChecksums);
         hook_jmp(0x080716cc, (int)custom_FS_ReferencedPakNames);
+        hook_jmp(0x080872ec, (int)custom_SV_ExecuteClientMessage);
 
         // Patch q3infoboom
         /* See:

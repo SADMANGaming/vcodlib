@@ -1,5 +1,7 @@
 #include "gsc_player.hpp"
 
+extern customPlayerState_t customPlayerState[MAX_CLIENTS];
+
 void gsc_player_setvelocity(scr_entref_t ref)
 {
     int id = ref.entnum;
@@ -69,35 +71,6 @@ void gsc_player_getuserinfo(scr_entref_t ref)
         stackPushString("");
 }
 
-/*
-void gsc_player_getclientcvar(scr_entref_t ref)
-{
-    int id = ref.entnum;
-    char *cvarName;
-
-    if ( !stackGetParams("s", &cvarName) )
-    {
-        stackError("gsc_player_getclientcvar() argument is undefined or has a wrong type");
-        stackPushUndefined();
-        return;
-    }
-
-    if ( id >= MAX_CLIENTS )
-    {
-        stackError("gsc_player_getclientcvar() entity %i is not a player", id);
-        stackPushUndefined();
-        return;
-    }
-
-    client_t *client = &svs.clients[id];
-    char *val = Info_ValueForKey(client->userinfo, cvarName);
-
-    if ( strlen(val) )
-        stackPushString(val);
-    else
-        stackPushString("");
-}
-*/
 void gsc_player_setuserinfo(scr_entref_t ref)
 {
     int id = ref.entnum;
@@ -396,6 +369,7 @@ void gsc_player_dropclient(scr_entref_t ref)
 
     stackPushBool(qtrue);
 }
+
 void gsc_player_setspeed(scr_entref_t ref)
 {
 	int id = ref.entnum;

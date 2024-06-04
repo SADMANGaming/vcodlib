@@ -76,6 +76,20 @@ static const Com_PrintMessage_t Com_PrintMessage = (Com_PrintMessage_t)0x0806f82
 typedef void (*ClientCommand_t)(int clientNum);
 extern ClientCommand_t ClientCommand;
 
+// FS
+typedef void (*FS_ConvertPath_t)(char *s);
+#if COD_VERSION == COD1_1_1
+static const FS_ConvertPath_t FS_ConvertPath = (FS_ConvertPath_t)0x08062f4c;
+#elif COD_VERSION == COD1_1_5
+#endif
+
+typedef int (*FS_Read_t)(void *buffer, int len, fileHandle_t f);
+#if COD_VERSION == COD1_1_1
+static const FS_Read_t FS_Read = (FS_Read_t)0x080628f4;
+#elif COD_VERSION == COD1_1_5
+static const FS_Read_t FS_Read = (FS_Read_t)0x08062960;
+#endif
+
 typedef long (*FS_SV_FOpenFileRead_t)(const char *filename, fileHandle_t *fp);
 #if COD_VERSION == COD1_1_1
 static const FS_SV_FOpenFileRead_t FS_SV_FOpenFileRead = (FS_SV_FOpenFileRead_t)0x0806ffb8;
@@ -94,12 +108,20 @@ static const FS_idPak_t FS_idPak = (FS_idPak_t)0x080754ea;
 typedef qboolean (*FS_svrPak_t)(char *pak);
 static const FS_svrPak_t FS_svrPak = (FS_svrPak_t)0x080756bf;
 #endif
+//
 
 typedef xfunction_t (*Scr_GetFunction_t)(const char** v_functionName, qboolean *v_developer);
 extern Scr_GetFunction_t Scr_GetFunction;
 
 typedef xmethod_t (*Scr_GetMethod_t)(const char** v_methodName, qboolean *v_developer);
 extern Scr_GetMethod_t Scr_GetMethod;
+
+// Cvars
+typedef cvar_t * (*Cvar_Set_t)(const char *var_name, const char *value);
+#if COD_VERSION == COD1_1_1
+static const Cvar_Set_t Cvar_Set = (Cvar_Set_t)0x0806f0b0;
+#elif COD_VERSION == COD1_1_5
+#endif
 
 typedef cvar_t * (*Cvar_Set2_t)(const char *var_name, const char *value, qboolean force);
 #if COD_VERSION == COD1_1_1
@@ -119,6 +141,51 @@ typedef cvar_t * (*Cvar_FindVar_t)(const char *var_name);
 static const Cvar_FindVar_t Cvar_FindVar = (Cvar_FindVar_t)0x0806e9b4;
 #elif COD_VERSION == COD1_1_5
 static const Cvar_FindVar_t Cvar_FindVar = (Cvar_FindVar_t)0x08072916;
+#endif
+
+typedef char * (*Cvar_GetString_t)(const char *cvarName);
+#if COD_VERSION == COD1_1_1
+static const Cvar_GetString_t Cvar_GetString = (Cvar_GetString_t)0x0806f8ec;
+#elif COD_VERSION == COD1_1_5
+#endif
+//
+
+#if COD_VERSION == COD1_1_1
+typedef void (*SV_ClientEnterWorld_t)(client_t *cl, usercmd_t *cmd);
+static const SV_ClientEnterWorld_t SV_ClientEnterWorld = (SV_ClientEnterWorld_t)0x080877d8;
+
+typedef void (*SV_SendClientGameState_t)(client_t *cl);
+static const SV_SendClientGameState_t SV_SendClientGameState = (SV_SendClientGameState_t)0x08085eec;
+
+typedef qboolean (*Sys_IsLANAddress_t)(netadr_t adr);
+static const Sys_IsLANAddress_t Sys_IsLANAddress = (Sys_IsLANAddress_t)0x080c72f8;
+
+typedef void (*SV_AuthorizeRequest_t)(netadr_t adr, int challenge);
+static const SV_AuthorizeRequest_t SV_AuthorizeRequest = (SV_AuthorizeRequest_t)0x08084d90;
+
+typedef qboolean (*SV_ClientCommand_t)(client_t *cl, msg_t *msg);
+static const SV_ClientCommand_t SV_ClientCommand = (SV_ClientCommand_t)0x08086e08;
+
+typedef void (*SV_SendClientSnapshot_t)(client_t *cl);
+static const SV_SendClientSnapshot_t SV_SendClientSnapshot = (SV_SendClientSnapshot_t)0x0808f844;
+
+typedef void (*SV_UserMove_t)(client_t *cl, msg_t *msg, qboolean delta);
+static const SV_UserMove_t SV_UserMove = (SV_UserMove_t)0x08086fa4;
+
+typedef void (*SV_SpawnServer_t)(char *server);
+static const SV_SpawnServer_t SV_SpawnServer = (SV_SpawnServer_t)0x0808a220;
+
+typedef void (*SV_InitArchivedSnapshot_t)(void);
+static const SV_InitArchivedSnapshot_t SV_InitArchivedSnapshot = (SV_InitArchivedSnapshot_t)0x0808b2c8;
+
+typedef void (*SV_RestartGameProgs_t)(int savepersist);
+static const SV_RestartGameProgs_t SV_RestartGameProgs = (SV_RestartGameProgs_t)0x08089350;
+
+typedef void (*SV_RunFrame_t)(void);
+static const SV_RunFrame_t SV_RunFrame = (SV_RunFrame_t)0x0808d3d4;
+
+typedef void (*SV_AddServerCommand_t)(client_t *client, svscmd_type type, const char *cmd);
+static const SV_AddServerCommand_t SV_AddServerCommand = (SV_AddServerCommand_t)0x0808b680;
 #endif
 
 typedef void (*SV_GameSendServerCommand_t)(int clientnum, svscmd_type type, const char *text);
@@ -215,8 +282,19 @@ static const NET_AdrToString_t NET_AdrToString = (NET_AdrToString_t)0x08083e10;
 typedef void (*Scr_Error_t)(const char *string);
 extern Scr_Error_t Scr_Error;
 
+// Game module
+typedef int (QDECL *VM_Call_t)( int, int callnum, ... );
+#if COD_VERSION == COD1_1_1
+static const VM_Call_t VM_Call = (VM_Call_t)0x08092158;
+#elif COD_VERSION == COD1_1_5
+#endif
+
 typedef void (*G_Say_t)(gentity_s *ent, gentity_s *target, int mode, const char *chatText);
 extern G_Say_t G_Say;
+
+typedef void (*G_RegisterCvars_t)(void);
+extern G_RegisterCvars_t G_RegisterCvars;
+//
 
 typedef const char * (*SV_GetConfigstringConst_t)(int index);
 extern SV_GetConfigstringConst_t SV_GetConfigstringConst;
@@ -238,15 +316,21 @@ static const Z_MallocInternal_t Z_MallocInternal = (Z_MallocInternal_t)0x080681e
 static const Z_MallocInternal_t Z_MallocInternal = (Z_MallocInternal_t)0x0806bbcc;
 #endif
 
-typedef int (*FS_Read_t)(void *buffer, int len, fileHandle_t f);
+// MSG
 #if COD_VERSION == COD1_1_1
-static const FS_Read_t FS_Read = (FS_Read_t)0x080628f4;
+typedef int (*MSG_ReadBits_t)(msg_t *msg, int numBits);
+static const MSG_ReadBits_t MSG_ReadBits = (MSG_ReadBits_t)0x0807f18c;
+#endif
+
+typedef int (*MSG_ReadBitsCompress_t)(const byte* input, byte* outputBuf, int readsize);
+#if COD_VERSION == COD1_1_1
+static const MSG_ReadBitsCompress_t MSG_ReadBitsCompress = (MSG_ReadBitsCompress_t)0x0807f23c;
 #elif COD_VERSION == COD1_1_5
-static const FS_Read_t FS_Read = (FS_Read_t)0x08062960;
 #endif
 
 typedef void (*MSG_Init_t)(msg_t *buf, byte *data, int length);
 #if COD_VERSION == COD1_1_1
+static const MSG_Init_t MSG_Init = (MSG_Init_t)0x0807eeb8;
 #elif COD_VERSION == COD1_1_5
 static const MSG_Init_t MSG_Init = (MSG_Init_t)0x0807f928;
 #endif
@@ -297,6 +381,7 @@ typedef void (*MSG_WriteDeltaEntity_t)(msg_t *msg, struct entityState_s *from, s
 #elif COD_VERSION == COD1_1_5
 static const MSG_WriteDeltaEntity_t MSG_WriteDeltaEntity = (MSG_WriteDeltaEntity_t)0x0808149a;
 #endif
+//
 
 typedef void (*SV_SendMessageToClient_t)(msg_t *msg, client_t *cl);
 #if COD_VERSION == COD1_1_1
@@ -310,11 +395,21 @@ typedef void (*SV_Netchan_TransmitNextFragment_t)(netchan_t *chan);
 static const SV_Netchan_TransmitNextFragment_t SV_Netchan_TransmitNextFragment = (SV_Netchan_TransmitNextFragment_t)0x080948d0;
 #endif
 
-#if COD_VERSION == COD1_1_5
+// Weapons
+typedef int (*BG_GetNumWeapons_t)(void);
+extern BG_GetNumWeapons_t BG_GetNumWeapons;
+
 typedef WeaponDef_t * (*BG_GetInfoForWeapon_t)(unsigned int weaponIndex);
-#endif
+extern BG_GetInfoForWeapon_t BG_GetInfoForWeapon;
 
 typedef int (*BG_GetWeaponIndexForName_t)(const char *name);
+extern BG_GetWeaponIndexForName_t BG_GetWeaponIndexForName;
+//
+
+// Animations
+typedef int (*BG_AnimationIndexForString_t)(char *src);
+extern BG_AnimationIndexForString_t BG_AnimationIndexForString;
+//
 
 typedef int (*Scr_IsSystemActive_t)();
 
@@ -366,6 +461,7 @@ static const SV_GameClientNum_t SV_GameClientNum = (SV_GameClientNum_t)0x0808927
 static const SV_GameClientNum_t SV_GameClientNum = (SV_GameClientNum_t)0x0808d331;
 #endif
 
+// Strings
 typedef char * (*Q_strlwr_t)(char *s1);
 extern Q_strlwr_t Q_strlwr;
 
@@ -373,6 +469,10 @@ typedef char * (*Q_strupr_t)(char *s1);
 extern Q_strupr_t Q_strupr;
 
 typedef void (*Q_strcat_t)(char *dest, int size, const char *src);
+
+typedef void (*I_strncpyz_t)(char *dest, const char *src, int destsize);
+static const I_strncpyz_t I_strncpyz = (I_strncpyz_t)0x08083288;
+//
 
 typedef void (*Com_Error_t)(errorParm_t code, const char *format, ...);
 #if COD_VERSION == COD1_1_1

@@ -121,10 +121,10 @@ typedef enum
 
 typedef enum
 {
-	STATE_PLAYING,
-	STATE_DEAD,
-	STATE_SPECTATOR,
-	STATE_INTERMISSION
+    STATE_PLAYING,
+    STATE_DEAD,
+    STATE_SPECTATOR,
+    STATE_INTERMISSION
 } sessionState_t;
 
 typedef enum
@@ -501,14 +501,14 @@ typedef struct playerState_s
 #if COD_VERSION == COD1_1_1
 typedef struct
 {
-	sessionState_t sessionState;
+    sessionState_t sessionState;
     //...
 } clientSession_t;
 
 struct gclient_s
 {
-	playerState_t ps;
-	clientSession_t sess;
+    playerState_t ps;
+    clientSession_t sess;
     //...
 };
 #endif
@@ -597,10 +597,10 @@ typedef struct client_s
 typedef struct
 {
     qboolean initialized;
-#if COD_VERSION == COD1_1_1
-    byte pad[8];
-#elif COD_VERSION == COD1_1_5
-    byte pad[10];
+    int time;
+    int snapFlagServerBit;
+#if COD_VERSION == COD1_1_5
+    byte pad[2];
 #endif
     client_t *clients;
     //...
@@ -613,13 +613,20 @@ typedef enum
     SS_GAME
 } serverState_t;
 
+enum clc_ops_e
+{
+    clc_move,
+    clc_moveNoDelta,
+    clc_clientCommand,
+    clc_EOF
+};
+
 enum svscmd_type
 {
     SV_CMD_CAN_IGNORE = 0x0,
     SV_CMD_RELIABLE = 0x1,
 };
 
-#if COD_VERSION == COD1_1_5
 typedef struct WeaponDef_t
 {
     int number;
@@ -627,7 +634,8 @@ typedef struct WeaponDef_t
     char* displayName;
     byte pad[0x1E4];
     int reloadAddTime;
-    byte pad2[0x20];
+    byte pad2[0x1C];
+    int fuseTime;
     float moveSpeedScale;
     float adsZoomFov;
     float adsZoomInFrac;
@@ -639,14 +647,21 @@ typedef struct WeaponDef_t
     float idleCrouchFactor;
     float idleProneFactor;
     byte pad5[0x50];
+#if COD_VERSION == COD1_1_5
     int rechamberWhileAds;
     float adsViewErrorMin;
     float adsViewErrorMax;
-    byte pad6[0x14C];
+#endif
+    int cookOffHold;
+    int clipOnly;
+#if COD_VERSION == COD1_1_5
+    byte pad6[0x144];
     float OOPosAnimLength[2];
+#endif
     //...
 } WeaponDef_t;
 
+#if COD_VERSION == COD1_1_5
 struct WeaponProperties // Custom struct for g_legacyStyle
 {
     int reloadAddTime;
@@ -682,11 +697,6 @@ static const int vmpub_offset = 0x0830acc0;
 #endif
 
 #if COD_VERSION == COD1_1_1
-#elif COD_VERSION == COD1_1_5
-static const int sv_offset = 0x0836b820;
-#endif
-
-#if COD_VERSION == COD1_1_1
 static const int svs_offset = 0x083b67a0;
 #elif COD_VERSION == COD1_1_5
 static const int svs_offset = 0x083ccd80;
@@ -698,11 +708,17 @@ static const int fs_searchpaths_offset = 0x080dd590;
 static const int fs_searchpaths_offset = 0x080e8c30;
 #endif
 
+#if COD_VERSION == COD1_1_1
+static const int sv_serverId_value_offset = 0x080e30c0;
+#endif
+
 #define scrVarPub (*((scrVarPub_t*)( varpub_offset )))
 #define scrVmPub (*((scrVmPub_t*)( vmpub_offset )))
-//#define sv (*((server_t*)( sv_offset )))
 #define svs (*((serverStatic_t*)( svs_offset )))
 #define fs_searchpaths (*((searchpath_t**)( fs_searchpaths_offset )))
+#if COD_VERSION == COD1_1_1
+#define sv_serverId_value (*((int*)( sv_serverId_value_offset )))
+#endif
 
 // Check for critical structure sizes and fail if not match
 #if __GNUC__ >= 6

@@ -22,7 +22,6 @@
 #include <sys/time.h> // milliseconds
 #include <sys/stat.h> // fsize
 
-#include "config.hpp"
 #include "declarations.hpp"
 #include "cracking.hpp"
 #include "functions.hpp"
@@ -39,6 +38,7 @@
 
 #include "gsc_player.hpp"
 #include "gsc_utils.hpp"
+#include "gsc_weapons.hpp"
 
 #define STACK_UNDEFINED 0
 #define STACK_STRING 1
@@ -88,6 +88,8 @@ uint64_t Sys_Milliseconds64(void);
 char *custom_va(const char *format, ...);
 
 
-//void gsc_testcommand(scr_entref_t ref);
+// For tests
+void gsc_testfunction();
+void gsc_testmethod(scr_entref_t ref);
 
 #endif
