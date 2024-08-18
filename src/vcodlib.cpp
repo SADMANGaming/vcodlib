@@ -1,39 +1,62 @@
-#include "gsc.hpp"
-#include "vcodlib.hpp"
-
 #include <signal.h>
+#include <arpa/inet.h>
+
+#include <memory>
+#include <tuple>
+#include <array>
+#include <map>
+#include <string>
+#include <sstream>
+#include <iostream>
+#include <cstring>
+#include <vector>
+
+#include "gsc.hpp"
+
+
+//Credits
+//void (*SV_AddServerCommand)(client_t *, int, const char*) = (void(*)(client_t*,int,const char*))0x808B680;
+	
+//SV_SendServerCommand(cl, 0, "e \"This server is powered by VCoDLib.%s\"", cl->name);
 
 // Stock cvars
-cvar_t* cl_paused;
-cvar_t* com_dedicated;
-cvar_t* com_logfile;
-cvar_t* com_sv_running;
-cvar_t* sv_allowDownload;
-cvar_t* sv_pure;
-cvar_t* sv_rconPassword;
-cvar_t* sv_serverid;
+cvar_t *com_cl_running;
+cvar_t *com_dedicated;
+cvar_t *com_logfile;
+cvar_t *com_sv_running;
+cvar_t *sv_allowDownload;
+cvar_t *sv_floodProtect;
+cvar_t *sv_gametype;
+cvar_t *sv_maxclients;
+cvar_t *sv_mapRotation;
+cvar_t *sv_mapRotationCurrent;
+cvar_t *sv_pure;
+cvar_t *sv_rconPassword;
+cvar_t *sv_serverid;
+cvar_t *sv_showCommands;
 
 // Custom cvars
-cvar_t* fs_callbacks;
-cvar_t* g_deadChat;
-cvar_t* g_debugCallbacks;
-cvar_t* g_legacyStyle;
-cvar_t* g_playerEject;
-cvar_t* jump_slowdownEnable;
-cvar_t* sv_cracked;
+cvar_t *fs_callbacks;
+cvar_t *fs_callbacks_additional;
+cvar_t *fs_svrPaks;
+cvar_t *g_deadChat;
+cvar_t *g_debugCallbacks;
+cvar_t *g_playerEject;
+cvar_t *g_resetSlide;
+cvar_t *sv_cracked;
+cvar_t *jump_height;
 
-cHook* hook_clientendframe;
-cHook* hook_com_init;
-cHook* hook_cvar_set2;
-cHook* hook_g_localizedstringindex;
-cHook* hook_gametype_scripts;
-cHook* hook_play_movement;
-cHook* hook_pm_walkmove;
-cHook* hook_sv_spawnserver;
-cHook* hook_sv_begindownload_f;
-cHook* hook_sv_maprestart_f;
-cHook* hook_sv_sendclientgamestate;
-cHook* hook_sys_loaddll;
+cHook *hook_clientendframe;
+cHook *hook_com_init;
+cHook *hook_cvar_set2;
+cHook *hook_g_localizedstringindex;
+cHook *hook_gametype_scripts;
+cHook *hook_play_movement;
+cHook *hook_sv_addoperatorcommands;
+cHook *hook_sv_spawnserver;
+cHook *hook_sv_begindownload_f;
+cHook *hook_sv_sendclientgamestate;
+cHook *hook_sys_loaddll;
 
 // Stock callbacks
 int codecallback_startgametype = 0;
@@ -62,29 +85,23 @@ customPlayerState_t customPlayerState[MAX_CLIENTS];
 
 // Game lib objects
 gentity_t* g_entities;
+gclient_t* g_clients;
+level_locals_t* level;
 pmove_t* pm;
+stringIndex_t* scr_const;
 
 // Game lib functions
-Scr_GetFunctionHandle_t Scr_GetFunctionHandle;
-Scr_GetNumParam_t Scr_GetNumParam;
-SV_Cmd_ArgvBuffer_t SV_Cmd_ArgvBuffer;
-ClientCommand_t ClientCommand;
-Scr_GetFunction_t Scr_GetFunction;
-Scr_GetMethod_t Scr_GetMethod;
-SV_GameSendServerCommand_t SV_GameSendServerCommand;
-Scr_ExecThread_t Scr_ExecThread;
-Scr_ExecEntThread_t Scr_ExecEntThread;
-Scr_ExecEntThreadNum_t Scr_ExecEntThreadNum;
-Scr_FreeThread_t Scr_FreeThread;
-Scr_Error_t Scr_Error;
 G_Say_t G_Say;
 G_RegisterCvars_t G_RegisterCvars;
-SV_GetConfigstringConst_t SV_GetConfigstringConst;
-SV_GetConfigstring_t SV_GetConfigstring;
+trap_SendServerCommand_t trap_SendServerCommand;
+trap_GetConfigstringConst_t trap_GetConfigstringConst;
+trap_GetConfigstring_t trap_GetConfigstring;
 BG_GetNumWeapons_t BG_GetNumWeapons;
 BG_GetInfoForWeapon_t BG_GetInfoForWeapon;
 BG_GetWeaponIndexForName_t BG_GetWeaponIndexForName;
 BG_AnimationIndexForString_t BG_AnimationIndexForString;
+Scr_GetFunctionHandle_t Scr_GetFunctionHandle;
+Scr_GetNumParam_t Scr_GetNumParam;
 Scr_IsSystemActive_t Scr_IsSystemActive;
 Scr_GetInt_t Scr_GetInt;
 Scr_GetString_t Scr_GetString;
@@ -100,124 +117,27 @@ Scr_MakeArray_t Scr_MakeArray;
 Scr_AddArray_t Scr_AddArray;
 Scr_AddObject_t Scr_AddObject;
 Scr_LoadScript_t Scr_LoadScript;
-StuckInClient_t StuckInClient;
+Scr_ExecThread_t Scr_ExecThread;
+Scr_ExecEntThread_t Scr_ExecEntThread;
+Scr_ExecEntThreadNum_t Scr_ExecEntThreadNum;
+Scr_FreeThread_t Scr_FreeThread;
+Scr_GetFunction_t Scr_GetFunction;
+Scr_GetMethod_t Scr_GetMethod;
+Scr_Error_t Scr_Error;
+Scr_ObjectError_t Scr_ObjectError;
+Scr_GetConstString_t Scr_GetConstString;
+Scr_ParamError_t Scr_ParamError;
 Q_strlwr_t Q_strlwr;
 Q_strupr_t Q_strupr;
 Q_strcat_t Q_strcat;
-
-// Resume addresses
-uintptr_t resume_addr_PM_WalkMove;
-uintptr_t resume_addr_PM_SlideMove;
-
-#if COD_VERSION == COD1_1_5
-#include <map>
-#include <string>
-std::map<std::string, std::map<std::string, WeaponProperties>> weapons_properties;
-
-void toggleLegacyStyle(bool enable)
-{
-    if(enable)
-        Cvar_Set2("jump_slowdownEnable", "0", qfalse);
-    else
-        Cvar_Set2("jump_slowdownEnable", "1", qfalse);
-
-    int id_kar98k_sniper = BG_GetWeaponIndexForName("kar98k_sniper_mp");
-    WeaponDef_t* weapon_kar98k_sniper = BG_GetInfoForWeapon(id_kar98k_sniper);
-    int id_springfield = BG_GetWeaponIndexForName("springfield_mp");
-    WeaponDef_t* weapon_springfield = BG_GetInfoForWeapon(id_springfield);
-    int id_mosin_nagant_sniper = BG_GetWeaponIndexForName("mosin_nagant_sniper_mp");
-    WeaponDef_t* weapon_mosin_nagant_sniper = BG_GetInfoForWeapon(id_mosin_nagant_sniper);
-
-    if (weapon_kar98k_sniper)
-    {
-        const WeaponProperties* properties_kar98k_sniper = nullptr;
-        if(enable)
-            properties_kar98k_sniper = &weapons_properties[weapon_kar98k_sniper->name]["legacy"];
-        else
-            properties_kar98k_sniper = &weapons_properties[weapon_kar98k_sniper->name]["default"];
-        weapon_kar98k_sniper->adsTransInTime = properties_kar98k_sniper->adsTransInTime;
-        weapon_kar98k_sniper->OOPosAnimLength[0] = 1.0 / (float)weapon_kar98k_sniper->adsTransInTime;
-        weapon_kar98k_sniper->adsZoomInFrac = properties_kar98k_sniper->adsZoomInFrac;
-        weapon_kar98k_sniper->idleCrouchFactor = properties_kar98k_sniper->idleCrouchFactor;
-        weapon_kar98k_sniper->idleProneFactor = properties_kar98k_sniper->idleProneFactor;
-        weapon_kar98k_sniper->rechamberWhileAds = properties_kar98k_sniper->rechamberWhileAds;
-        weapon_kar98k_sniper->adsViewErrorMin = properties_kar98k_sniper->adsViewErrorMin;
-        weapon_kar98k_sniper->adsViewErrorMax = properties_kar98k_sniper->adsViewErrorMax;
-    }
-
-    if (weapon_mosin_nagant_sniper)
-    {
-        const WeaponProperties* properties_mosin_nagant_sniper = nullptr;
-        if(enable)
-            properties_mosin_nagant_sniper = &weapons_properties[weapon_mosin_nagant_sniper->name]["legacy"];
-        else
-            properties_mosin_nagant_sniper = &weapons_properties[weapon_mosin_nagant_sniper->name]["default"];
-        weapon_mosin_nagant_sniper->reloadAddTime = properties_mosin_nagant_sniper->reloadAddTime;
-        weapon_mosin_nagant_sniper->adsTransInTime = properties_mosin_nagant_sniper->adsTransInTime;
-        weapon_mosin_nagant_sniper->OOPosAnimLength[0] = 1.0 / (float)weapon_mosin_nagant_sniper->adsTransInTime;
-        weapon_mosin_nagant_sniper->adsZoomInFrac = properties_mosin_nagant_sniper->adsZoomInFrac;
-        weapon_mosin_nagant_sniper->idleCrouchFactor = properties_mosin_nagant_sniper->idleCrouchFactor;
-        weapon_mosin_nagant_sniper->idleProneFactor = properties_mosin_nagant_sniper->idleProneFactor;
-        weapon_mosin_nagant_sniper->rechamberWhileAds = properties_mosin_nagant_sniper->rechamberWhileAds;
-        weapon_mosin_nagant_sniper->adsViewErrorMin = properties_mosin_nagant_sniper->adsViewErrorMin;
-        weapon_mosin_nagant_sniper->adsViewErrorMax = properties_mosin_nagant_sniper->adsViewErrorMax;
-    }
-
-    if (weapon_springfield)
-    {
-        const WeaponProperties* properties_springfield = nullptr;
-        if(enable)
-            properties_springfield = &weapons_properties[weapon_springfield->name]["legacy"];
-        else
-            properties_springfield = &weapons_properties[weapon_springfield->name]["default"];
-        weapon_springfield->adsTransInTime = properties_springfield->adsTransInTime;
-        weapon_springfield->OOPosAnimLength[0] = 1.0 / (float)weapon_springfield->adsTransInTime;
-        weapon_springfield->adsZoomInFrac = properties_springfield->adsZoomInFrac;
-        weapon_springfield->idleCrouchFactor = properties_springfield->idleCrouchFactor;
-        weapon_springfield->idleProneFactor = properties_springfield->idleProneFactor;
-        weapon_springfield->rechamberWhileAds = properties_springfield->rechamberWhileAds;
-        weapon_springfield->adsViewErrorMin = properties_springfield->adsViewErrorMin;
-        weapon_springfield->adsViewErrorMax = properties_springfield->adsViewErrorMax;
-    }
-}
-#endif
-
-#if COD_VERSION == COD1_1_5
-void custom_Cvar_Set2(const char *var_name, const char *value, qboolean force)
-{
-    bool check_g_legacyStyle = false;
-    bool g_legacyStyle_before;
-    bool g_legacyStyle_after;
-
-    if(com_sv_running != NULL && com_sv_running->integer)
-    {
-        if(!strcasecmp(var_name, g_legacyStyle->name))
-        {
-            check_g_legacyStyle = true;
-            g_legacyStyle_before = g_legacyStyle->integer ? true : false;
-        }
-    }
-    
-    hook_cvar_set2->unhook();
-    cvar_t* (*Cvar_Set2)(const char *var_name, const char *value, qboolean force);
-    *(int *)&Cvar_Set2 = hook_cvar_set2->from;
-
-    if(check_g_legacyStyle)
-    {
-        cvar_t* var = Cvar_Set2(var_name, value, force);
-        if(var)
-        {
-            g_legacyStyle_after = var->integer ? true : false;
-            if(g_legacyStyle_before != g_legacyStyle_after)
-                toggleLegacyStyle(var->integer);
-        }
-    }
-    else
-        Cvar_Set2(var_name, value, force);
-
-    hook_cvar_set2->hook();
-}
-#endif
+Q_strncpyz_t Q_strncpyz;
+Q_CleanStr_t Q_CleanStr;
+StuckInClient_t StuckInClient;
+trap_Argv_t trap_Argv;
+ClientCommand_t ClientCommand;
+Com_SkipRestOfLine_t Com_SkipRestOfLine;
+Com_ParseRestOfLine_t Com_ParseRestOfLine;
+Com_ParseInt_t Com_ParseInt;
 
 void custom_Com_Init(char *commandLine)
 {
@@ -228,39 +148,42 @@ void custom_Com_Init(char *commandLine)
     hook_com_init->hook();
     
     // Get references to stock cvars
-    cl_paused = Cvar_FindVar("cl_paused");
+    com_cl_running = Cvar_FindVar("cl_running");
     com_dedicated = Cvar_FindVar("dedicated");
     com_logfile = Cvar_FindVar("logfile");
     com_sv_running = Cvar_FindVar("sv_running");
     sv_allowDownload = Cvar_FindVar("sv_allowDownload");
+    sv_floodProtect = Cvar_FindVar("sv_floodProtect");
+    sv_gametype = Cvar_FindVar("g_gametype");
+    sv_maxclients = Cvar_FindVar("sv_maxclients");
+    sv_mapRotation = Cvar_FindVar("sv_mapRotation");
+    sv_mapRotationCurrent = Cvar_FindVar("sv_mapRotationCurrent");
     sv_pure = Cvar_FindVar("sv_pure");
     sv_rconPassword = Cvar_FindVar("rconpassword");
     sv_serverid = Cvar_FindVar("sv_serverid");
+    sv_showCommands = Cvar_FindVar("sv_showCommands");
 
     // Register custom cvars
     Cvar_Get("vcodlib", "1", CVAR_SERVERINFO);
-    fs_callbacks = Cvar_Get("fs_callbacks", "", CVAR_ARCHIVE);
-    g_debugCallbacks = Cvar_Get("g_debugCallbacks", "0", CVAR_ARCHIVE);
-    sv_cracked = Cvar_Get("sv_cracked", "0", CVAR_ARCHIVE);
-#if COD_VERSION == COD1_1_1
     Cvar_Get("sv_wwwDownload", "0", CVAR_SYSTEMINFO | CVAR_ARCHIVE);
     Cvar_Get("sv_wwwBaseURL", "", CVAR_SYSTEMINFO | CVAR_ARCHIVE);
     
+    fs_callbacks = Cvar_Get("fs_callbacks", "", CVAR_ARCHIVE);
+    fs_callbacks_additional = Cvar_Get("fs_callbacks_additional", "", CVAR_ARCHIVE);
+    fs_svrPaks = Cvar_Get("fs_svrPaks", "", CVAR_ARCHIVE);
+    g_deadChat = Cvar_Get("g_deadChat", "0", CVAR_ARCHIVE);
+    g_debugCallbacks = Cvar_Get("g_debugCallbacks", "0", CVAR_ARCHIVE);
+    g_playerEject = Cvar_Get("g_playerEject", "1", CVAR_ARCHIVE);
+    g_resetSlide = Cvar_Get("g_resetSlide", "0", CVAR_ARCHIVE);
+    sv_cracked = Cvar_Get("sv_cracked", "0", CVAR_ARCHIVE);
+
     /*
     Force cl_allowDownload on client, otherwise 1.1x can't download to join the server
-    I don't want to force download, I would prefer this to be temporary and stop forcing later when a solution is found
+    TODO: Force only for 1.1x clients
     */
     Cvar_Get("cl_allowDownload", "1", CVAR_SYSTEMINFO);
-
-    g_deadChat = Cvar_Get("g_deadChat", "0", CVAR_ARCHIVE);
-    g_playerEject = Cvar_Get("g_playerEject", "1", CVAR_ARCHIVE);
-#elif COD_VERSION == COD1_1_5
-    g_legacyStyle = Cvar_Get("g_legacyStyle", "0", CVAR_SYSTEMINFO | CVAR_ARCHIVE);
-    jump_slowdownEnable =  Cvar_Get("jump_slowdownEnable", "1", CVAR_SYSTEMINFO | CVAR_ARCHIVE);
-#endif
 }
 
-#if COD_VERSION == COD1_1_1
 void hook_G_Say(gentity_s *ent, gentity_s *target, int mode, const char *chatText)
 {
     // 1.1 deadchat support
@@ -274,16 +197,39 @@ void hook_G_Say(gentity_s *ent, gentity_s *target, int mode, const char *chatTex
 
     G_Say(ent, NULL, mode, chatText);
 }
-#endif
 
-#if COD_VERSION == COD1_1_1
 qboolean FS_svrPak(const char *base)
 {
-    if(strstr(base, "_svr_"))
+    if (strstr(base, "_svr_"))
         return qtrue;
+
+    if (*fs_svrPaks->string)
+    {
+        bool isSvrPak = false;
+        size_t lenString = strlen(fs_svrPaks->string) +1;
+        char* stringCopy = (char*)malloc(lenString);
+        strcpy(stringCopy, fs_svrPaks->string);
+
+        const char* separator = ";";
+        char* strToken = strtok(stringCopy, separator);
+
+        while (strToken != NULL)
+        {
+            if (!strcmp(base, strToken))
+            {
+                isSvrPak = true;
+                break;
+            }
+            strToken = strtok(NULL, separator);
+        }
+
+        free(stringCopy);
+        if (isSvrPak)
+            return qtrue;
+    }
+
     return qfalse;
 }
-#endif
 
 const char* custom_FS_ReferencedPakNames(void)
 {
@@ -292,7 +238,7 @@ const char* custom_FS_ReferencedPakNames(void)
 
     info[0] = 0;
     
-    for ( search = fs_searchpaths ; search ; search = search->next )
+    for (search = fs_searchpaths ; search ; search = search->next)
     {
         if (!search->pak)
             continue;
@@ -317,7 +263,7 @@ const char* custom_FS_ReferencedPakChecksums(void)
     
     info[0] = 0;
 
-    for ( search = fs_searchpaths ; search ; search = search->next )
+    for (search = fs_searchpaths ; search ; search = search->next)
     {
         if (!search->pak)
             continue;
@@ -325,7 +271,7 @@ const char* custom_FS_ReferencedPakChecksums(void)
         if(FS_svrPak(search->pak->pakBasename))
             continue;
         
-        Q_strcat( info, sizeof( info ), custom_va( "%i ", search->pak->checksum ) );
+        Q_strcat(info, sizeof( info ), custom_va("%i ", search->pak->checksum));
     }
 
     return info;
@@ -335,7 +281,6 @@ int custom_GScr_LoadGameTypeScript()
 {
     unsigned int i;
     char path_for_cb[512] = "maps/mp/gametypes/_callbacksetup";
-    char path_for_cb_custom[512] = "callback"; //TODO: maybe don't use another hardcoded path for custom callbacks
 
     hook_gametype_scripts->unhook();
     int (*GScr_LoadGameTypeScript)();
@@ -343,16 +288,23 @@ int custom_GScr_LoadGameTypeScript()
     int ret = GScr_LoadGameTypeScript();
     hook_gametype_scripts->hook();
 
-    if(!Scr_LoadScript(path_for_cb_custom))
-        printf("####### custom_GScr_LoadGameTypeScript: Didn't detect a custom callback file. \n");
+    if(*fs_callbacks_additional->string)
+    {
+        if(!Scr_LoadScript(fs_callbacks_additional->string))
+            Com_DPrintf("custom_GScr_LoadGameTypeScript: Scr_LoadScript for fs_callbacks_additional cvar failed.\n");
+    }
+    else
+    {
+        Com_DPrintf("custom_GScr_LoadGameTypeScript: No custom callback file specified in fs_callbacks_additional cvar.\n");
+    }
 
-    if ( strlen(fs_callbacks->string) )
+    if(*fs_callbacks->string)
         strncpy(path_for_cb, fs_callbacks->string, sizeof(path_for_cb));
         
-    for ( i = 0; i < sizeof(callbacks)/sizeof(callbacks[0]); i++ )
+    for (i = 0; i < sizeof(callbacks)/sizeof(callbacks[0]); i++)
     {
-        if(!strcmp(callbacks[i].name, "CodeCallback_PlayerCommand")) // Custom callback
-            *callbacks[i].pos = Scr_GetFunctionHandle(path_for_cb_custom, callbacks[i].name);
+        if(!strcmp(callbacks[i].name, "CodeCallback_PlayerCommand")) // Custom callback: PlayerCommand
+            *callbacks[i].pos = Scr_GetFunctionHandle(fs_callbacks_additional->string, callbacks[i].name);
         else
             *callbacks[i].pos = Scr_GetFunctionHandle(path_for_cb, callbacks[i].name);
         
@@ -381,7 +333,7 @@ int custom_G_LocalizedStringIndex(const char *string)
 
     for(i = 1; i < 256; i++)
     {
-        SV_GetConfigstring(start + i, s, sizeof(s));
+        trap_GetConfigstring(start + i, s, sizeof(s));
         if(!*s)
             break;
         if (!strcmp(s, string))
@@ -401,11 +353,9 @@ void hook_ClientCommand(int clientNum)
     if(!Scr_IsSystemActive())
         return;
 
-#if COD_VERSION == COD1_1_1
     char* cmd = Cmd_Argv(0);
     if(!strcmp(cmd, "gc"))
         return; // Prevent server crash
-#endif
       
     if(!codecallback_playercommand)
     {
@@ -418,7 +368,7 @@ void hook_ClientCommand(int clientNum)
     for(int i = 0; i < args; i++)
     {
         char tmp[MAX_STRINGLENGTH];
-        SV_Cmd_ArgvBuffer(i, tmp, sizeof(tmp));
+        trap_Argv(i, tmp, sizeof(tmp));
         if(i == 1 && tmp[0] >= 20 && tmp[0] <= 22)
         {
             char *part = strtok(tmp + 1, " ");
@@ -456,30 +406,540 @@ void custom_SV_SpawnServer(char *server)
     SV_SpawnServer(server);
     hook_sv_spawnserver->hook();
 
-#if COD_VERSION == COD1_1_5
-    if(weapons_properties.empty())
-    {
-        weapons_properties["kar98k_sniper_mp"]["default"] = { 199, 449, 0.1, 0.6, 0.2, 0, 1.2, 1.4 };
-        weapons_properties["kar98k_sniper_mp"]["legacy"] = { 199, 299, 0.42, 0.2, 0.085, 1, 0, 0 };
-
-        weapons_properties["mosin_nagant_sniper_mp"]["default"] = { 1339, 449, 0.1, 0.6, 0.2, 0, 1.2, 1.4 };
-        weapons_properties["mosin_nagant_sniper_mp"]["legacy"] = { 339, 299, 0.42, 0.2, 0.085, 1, 0, 0 };
-
-        weapons_properties["springfield_mp"]["default"] = { 199, 449, 0.1, 0.6, 0.2, 0, 1.2, 1.4 };
-        weapons_properties["springfield_mp"]["legacy"] = { 199, 299, 0.5, 0.2, 0.085, 1, 0, 0 };
-        /*
-        springfield_mp adsZoomInFrac in 1.1 patch weapon file = 0.05.
-        There must be an error somewhere. Now replacing by 0.5 to fix slowness.
-        */
-    }
-
-    if(g_legacyStyle->integer)
-        toggleLegacyStyle(true);
-#endif
-
 #if COMPILE_SQLITE == 1
     free_sqlite_db_stores_and_tasks();
 #endif
+}
+
+std::tuple<bool, int, int, std::string> banInfoForIp(char* ip)
+{
+    char *file;
+    std::string token;
+    const char *text;
+    std::tuple<bool, int, int, std::string> banInfo;
+
+    banInfo = std::make_tuple(false, 0, 0, "");
+
+    if(FS_ReadFile("ban.txt", (void **)&file) < 0)
+        return banInfo;
+
+    text = file;
+    while (1)
+    {
+        token = Com_Parse(&text);
+        if(token.empty())
+            break;
+
+        if (!strcmp(token.c_str(), ip))
+        {
+            std::get<0>(banInfo) = true;                // banned
+            Com_Parse(&text);                           // player name
+            std::get<1>(banInfo) = Com_ParseInt(&text); // duration
+            std::get<2>(banInfo) = Com_ParseInt(&text); // ban date
+            std::get<3>(banInfo) = Com_Parse(&text);    // reason
+            break;
+        }
+        Com_SkipRestOfLine(&text);
+    }
+    FS_FreeFile(file);
+    return banInfo;
+}
+
+
+void sendMessageTo_inGameAdmin_orServerConsole(client_t *cl, std::string message)
+{
+    std::string finalMessage;
+    if (cl)
+    {
+        finalMessage = "e \"";
+        finalMessage.append(message);
+        finalMessage.append("\"");
+        SV_SendServerCommand(cl, SV_CMD_CAN_IGNORE, finalMessage.c_str());
+    }
+    else
+    {
+        finalMessage = message;
+        finalMessage.append("\n");
+        Com_Printf(finalMessage.c_str());
+    }
+}
+const std::array<std::string, 5> banParameters = {"-i", "-n", "-r", "-d", "-a"};
+const std::array<std::string, 2> unbanParameters = {"-i", "-a"};
+/*
+-i: ip
+-n: banned client number
+-r: reason
+-d: duration
+-a: admin client number
+*/
+template <std::size_t N>
+bool isValidParameter(std::string toCheck, std::array<std::string, N> parameters)
+{
+    for (const std::string&parameter : parameters)
+    {
+        if(toCheck == parameter)
+            return true;
+    }
+    return false;
+}
+static void ban()
+{
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+
+    if (Cmd_Argc() < 3)
+    {
+        Com_Printf("Usage: ban (-i <IP address> | -n <client number>) [-r reason] [-d duration]\n");
+        Com_Printf("Notes: Use \"h\" for hours or \"d\" for days\n");
+        return;
+    }
+
+    std::vector<std::string> argvList;
+    std::map<std::string, std::string> parsedParameters;
+    std::string infoMessage;
+    bool useIp = false;
+    bool useClientnum = false;
+    int file;
+    bool clAdmin_searched = false;
+    client_t *clToBan;
+    client_t *clAdmin;
+    char ip[16];
+    char cleanName[64] = "n/a";
+    time_t current_time;
+    int duration = -1;
+    std::string duration_drop;
+    std::string reason_log = "none";
+    std::string reason_drop;
+
+
+    // Directly store all the argv to be able to use Cmd_TokenizeString before the end of the parse
+    for (int i = 1; i < Cmd_Argc(); i++)
+    {
+        std::string argv = Cmd_Argv(i);
+        argvList.push_back(argv);
+    }
+    
+    //// Parse and store the parameters
+    for (std::size_t i = 0; i < argvList.size(); i++)
+    {
+        std::string argv = argvList[i];
+        if (isValidParameter(argv, banParameters)) // Found an option
+        {
+            if (parsedParameters.find(argv) == parsedParameters.end())
+            {
+                // Parse the argument
+                std::string value;
+                for (std::size_t j = i+1; j < argvList.size(); j++)
+                {
+                    std::string argv_next = argvList[j];
+                    if (!isValidParameter(argv_next, banParameters))
+                    {
+                        if(j != i+1)
+                            value.append(" ");
+                        value.append(argv_next);
+                    }
+                    else
+                        break;
+                }
+                // Store the pair
+                if(!value.empty())
+                    parsedParameters[argv] = value;
+
+                /*
+                Check if got admin client after first storage and only once
+                because it should be passed as first parameter from gsc
+                so you can redirect the error messages since the beginning
+                */
+                if (!clAdmin_searched)
+                {
+                    auto adminParam = parsedParameters.find("-a");
+                    if (adminParam != parsedParameters.end())
+                    {
+                        std::string arg_sv_getplayerbynum = "dummy " + adminParam->second; // Cmd_Argv(1) for SV_GetPlayerByNum
+                        Cmd_TokenizeString(arg_sv_getplayerbynum.c_str());
+                        clAdmin = SV_GetPlayerByNum();
+                    }
+                    clAdmin_searched = true;
+                }
+            }
+            else
+            {
+                infoMessage = "Duplicated option " + argv;
+                sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+                return;
+            }
+        }
+        else if (argv[0] == '-' && !isValidParameter(argv, banParameters))
+        {
+            infoMessage = "Unrecognized option " + argv;
+            sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+            return;
+        }
+    }
+    ////
+    
+    //// Check the parameters
+    // Client number
+    if (parsedParameters.find("-n") != parsedParameters.end())
+    {
+        // Check if specified both an IP and a client number
+        if(parsedParameters.find("-i") != parsedParameters.end())
+        {
+            infoMessage = "Don't use both an IP and a client number";
+            sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+            return;
+        }
+        useClientnum = true;
+    }
+
+    // IP
+    auto ipParam = parsedParameters.find("-i");
+    if (ipParam != parsedParameters.end())
+    {
+        struct sockaddr_in sa;
+        if(!inet_pton(AF_INET, ipParam->second.c_str(), &(sa.sin_addr)))
+        {
+            infoMessage = "Invalid IP address " + ipParam->second;
+            sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+            return;
+        }
+        useIp = true;
+        std::strcpy(ip, ipParam->second.c_str());
+    }
+
+    if(!useClientnum && !useIp)
+    {
+        infoMessage = "Use an IP or a client number";
+        sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+        return;
+    }
+
+    // Duration
+    auto durationParam = parsedParameters.find("-d");
+    if (durationParam != parsedParameters.end())
+    {
+        char durationParam_lastChar = durationParam->second.back();
+        if (durationParam_lastChar != 'h' && durationParam_lastChar != 'd')
+        {
+            infoMessage = "Invalid duration parameter " + durationParam->second;
+            sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+            return;
+        }
+        else
+        {
+            durationParam->second.pop_back(); // Remove unit indicator
+            if (durationParam->second.empty())
+            {
+                infoMessage = "Invalid duration parameter " + durationParam->second;
+                sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+                return;
+            }
+            else
+            {
+                for (int i = 0; durationParam->second[i]; i++)
+                {
+                    if (durationParam->second[i] < '0' || durationParam->second[i] > '9')
+                    {
+                        infoMessage = "Invalid duration parameter " + durationParam->second;
+                        sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+                        return;
+                    }
+                }
+                duration = std::stoi(durationParam->second);
+            }
+        }
+        if(durationParam_lastChar == 'h')
+        {
+            duration_drop = durationParam->second + " hour";
+            if(duration > 1)
+                duration_drop.append("s");
+            duration *= 3600;
+        }
+        else if(durationParam_lastChar == 'd')
+        {
+            duration_drop = durationParam->second + " day";
+            if(duration > 1)
+                duration_drop.append("s");
+            duration *= 86400;
+        }
+    }
+
+    // Reason
+    auto reasonParam = parsedParameters.find("-r");
+    if (reasonParam != parsedParameters.end())
+    {
+        reason_log = reasonParam->second.c_str();
+        reason_drop = "Ban reason: " + reasonParam->second;
+    }
+
+    // Add duration to drop message after reason
+    if (!duration_drop.empty())
+    {
+        if(reason_drop.empty())
+        {
+            reason_drop = "Ban duration: " + duration_drop;
+        }
+        else
+        {
+            reason_drop.append(" - ");
+            reason_drop.append("Duration: ");
+            reason_drop.append(duration_drop);
+        }
+    }
+    else if (reason_drop.empty())
+    {
+        reason_drop = "EXE_PLAYERKICKED";
+    }
+    ////
+
+    // Find the player
+    if (useClientnum)
+    {
+        std::string arg_sv_getplayerbynum = "dummy " + parsedParameters.find("-n")->second; // Cmd_Argv(1) for SV_GetPlayerByNum
+        Cmd_TokenizeString(arg_sv_getplayerbynum.c_str());
+        clToBan = SV_GetPlayerByNum();
+        if(!clToBan)
+        {
+            infoMessage = "Couldn't find player by num " + parsedParameters.find("-n")->second;
+            sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+            return;
+        }
+        else
+        {
+            snprintf(ip, sizeof(ip), "%d.%d.%d.%d", clToBan->netchan.remoteAddress.ip[0], clToBan->netchan.remoteAddress.ip[1], clToBan->netchan.remoteAddress.ip[2], clToBan->netchan.remoteAddress.ip[3]);
+        }
+    }
+    else if (useIp)
+    {
+        int i;
+        client_t *clCheck;
+        for (i = 0, clCheck = svs.clients; i < sv_maxclients->integer; i++, clCheck++)
+        {
+            if (clCheck->state > CS_CONNECTED)
+            {
+                char ip_check[16];
+                snprintf(ip_check, sizeof(ip_check), "%d.%d.%d.%d", clCheck->netchan.remoteAddress.ip[0], clCheck->netchan.remoteAddress.ip[1], clCheck->netchan.remoteAddress.ip[2], clCheck->netchan.remoteAddress.ip[3]);
+                if (!strcmp(ip_check, ip))
+                {
+                    clToBan = clCheck;
+                    break;
+                }
+            }
+        }
+    }
+    
+    auto banInfo = banInfoForIp(ip);
+    if(std::get<0>(banInfo) == true) // banned
+    {
+        std::ostringstream oss;
+        oss << "This IP (" << ip << ") is already banned";
+        infoMessage = oss.str();
+        sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+        return;
+    }
+    
+    if (clToBan)
+        Q_strncpyz(cleanName, clToBan->name, sizeof(cleanName));
+    
+    // Add IP to ban.txt
+    if (FS_FOpenFileByMode("ban.txt", &file, FS_APPEND) < 0)
+    {
+        infoMessage = "Couldn't open ban.txt";
+        sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+        return;
+    }
+    else
+    {
+        current_time = time(NULL);
+        FS_Write(file, "\"%s\" \"%s\" \"%i\" \"%i\" \"%s\"\r\n", ip, cleanName, duration, current_time, reason_log.c_str());
+        FS_FCloseFile(file);
+    }
+
+    // Disconnect the player
+    if (clToBan)
+    {
+        SV_DropClient(clToBan, reason_drop.c_str());
+        clToBan->lastPacketTime = svs.time;
+    }
+}
+
+static void unban()
+{
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+
+    if (Cmd_Argc() < 2)
+    {
+        Com_Printf("Usage: unban -i <IP address>\n");
+        return;
+    }
+    
+    std::vector<std::string> argvList;
+    std::map<std::string, std::string> parsedParameters;
+    std::string infoMessage;
+    bool clAdmin_searched = false;
+    client_t *clAdmin;
+    char *file;
+    int fileSize;
+    char *line;
+    std::string token;
+    bool found = false;
+    char *text;
+    std::string ip;
+    
+    // Directly store all the argv to be able to use Cmd_TokenizeString before the end of the parse
+    for (int i = 1; i < Cmd_Argc(); i++)
+    {
+        std::string argv = Cmd_Argv(i);
+        argvList.push_back(argv);
+    }
+
+    //// Parse and store the parameters
+    for (std::size_t i = 0; i < argvList.size(); i++)
+    {
+        std::string argv = argvList[i];
+        if (isValidParameter(argv, unbanParameters)) // Found an option
+        {
+            if (parsedParameters.find(argv) == parsedParameters.end())
+            {
+                // Parse the argument
+                std::string value;
+                for (std::size_t j = i+1; j < argvList.size(); j++)
+                {
+                    std::string argv_next = argvList[j];
+                    if (!isValidParameter(argv_next, unbanParameters))
+                    {
+                        if(j != i+1)
+                            value.append(" ");
+                        value.append(argv_next);
+                    }
+                    else
+                        break;
+                }
+                // Store the pair
+                if(!value.empty())
+                    parsedParameters[argv] = value;
+
+                /*
+                Check if got admin client after first storage and only once
+                because it should be passed as first parameter from gsc
+                so you can redirect the error messages since the beginning
+                */
+                if (!clAdmin_searched)
+                {
+                    auto adminParam = parsedParameters.find("-a");
+                    if (adminParam != parsedParameters.end())
+                    {
+                        std::string arg_sv_getplayerbynum = "dummy " + adminParam->second; // Cmd_Argv(1) for SV_GetPlayerByNum
+                        Cmd_TokenizeString(arg_sv_getplayerbynum.c_str());
+                        clAdmin = SV_GetPlayerByNum();
+                    }
+                    clAdmin_searched = true;
+                }
+            }
+            else
+            {
+                infoMessage = "Duplicated option " + argv;
+                sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+                return;
+            }
+        }
+        else if (argv[0] == '-' && !isValidParameter(argv, unbanParameters))
+        {
+            infoMessage = "Unrecognized option " + argv;
+            sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+            return;
+        }
+    }
+    ////
+
+    //// Check the parameters
+    // IP
+    auto ipParam = parsedParameters.find("-i");
+    if (ipParam != parsedParameters.end())
+    {
+        struct sockaddr_in sa;
+        if(!inet_pton(AF_INET, ipParam->second.c_str(), &(sa.sin_addr)))
+        {
+            infoMessage = "Invalid IP address " + ipParam->second;
+            sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+            return;
+        }
+        ip = ipParam->second;
+    }
+    else
+    {
+        infoMessage = "Specify an IP address";
+        sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+        return;
+    }
+    ////
+    
+    // Remove IP from ban.txt
+    fileSize = FS_ReadFile("ban.txt", (void **)&file);
+    if (fileSize < 0)
+    {
+        infoMessage = "Couldn't read ban.txt";
+        sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+        return;        
+    }
+    
+    text = file;
+    while (1)
+    {
+        line = text;
+        token = Com_Parse((const char **)&text);
+        if(token.empty())
+            break;
+
+        if(token == ip)
+            found = true;
+
+        Com_SkipRestOfLine((const char **)&text);
+
+        if (found)
+        {
+            memmove((unsigned char *)line, (unsigned char *)text, fileSize - (text - file) + 1);
+            fileSize -= text - line;
+            text = line;
+            break;
+        }
+    }
+
+    FS_WriteFile("ban.txt", file, fileSize);
+    FS_FreeFile(file);
+
+    if (found)
+    {
+        infoMessage = "Unbanned IP " + ip;
+        sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+    }
+    else
+    {
+        std::ostringstream oss;
+        oss << "IP " << ip << " not found";
+        infoMessage = oss.str();
+        sendMessageTo_inGameAdmin_orServerConsole(clAdmin, infoMessage);
+    }
+}
+
+void custom_SV_AddOperatorCommands()
+{
+    hook_sv_addoperatorcommands->unhook();
+    void (*SV_AddOperatorCommands)();
+    *(int *)&SV_AddOperatorCommands = hook_sv_addoperatorcommands->from;
+    SV_AddOperatorCommands();
+
+    Cmd_AddCommand("ban", ban);
+    Cmd_AddCommand("unban", unban);
+
+    hook_sv_addoperatorcommands->hook();
 }
 
 void custom_SV_SendClientGameState(client_t *client)
@@ -502,7 +962,7 @@ qboolean hook_StuckInClient(gentity_s *self)
     return StuckInClient(self);
 }
 
-qboolean ShouldServeFile(const char *requestedFilePath)
+bool shouldServeFile(const char *requestedFilePath)
 {
     static char localFilePath[MAX_OSPATH*2+5];
     searchpath_t* search;
@@ -516,24 +976,24 @@ qboolean ShouldServeFile(const char *requestedFilePath)
             snprintf(localFilePath, sizeof(localFilePath), "%s/%s.pk3", search->pak->pakGamename, search->pak->pakBasename);
             if(!strcmp(localFilePath, requestedFilePath))
                 if(!FS_svrPak(search->pak->pakBasename))
-                    return qtrue;
+                    return true;
         }
     }
-    return qfalse;
+    return false;
 }
 
 void custom_SV_BeginDownload_f(client_t *cl)
 {
     // Patch q3dirtrav
     int args = Cmd_Argc();
-    if(args > 1)
+    if (args > 1)
     {
         const char* arg1 = Cmd_Argv(1);
-        if(!ShouldServeFile(arg1))
+        if (!shouldServeFile(arg1))
         {
             char ip[16];
             snprintf(ip, sizeof(ip), "%d.%d.%d.%d", cl->netchan.remoteAddress.ip[0], cl->netchan.remoteAddress.ip[1], cl->netchan.remoteAddress.ip[2], cl->netchan.remoteAddress.ip[3]);
-            printf("####### WARNING: %s (%s) tried to download %s. \n", cl->name, ip, arg1);
+            Com_Printf("WARNING: %s (%s) tried to download %s.\n", cl->name, ip, arg1);
             return;
         }
     }
@@ -545,7 +1005,6 @@ void custom_SV_BeginDownload_f(client_t *cl)
     hook_sv_begindownload_f->hook();
 }
 
-#if COD_VERSION == COD1_1_1
 void custom_SV_ExecuteClientMessage(client_t *cl, msg_t *msg)
 {
     byte msgBuf[MAX_MSGLEN];
@@ -590,7 +1049,7 @@ void custom_SV_ExecuteClientMessage(client_t *cl, msg_t *msg)
 
         } while (cl->state != CS_ZOMBIE);
     }
-    else if((cl->serverId & 0xF0) == (sv_serverId_value & 0xF0))
+    else if ((cl->serverId & 0xF0) == (sv_serverId_value & 0xF0))
     {
         if (cl->state == CS_PRIMED)
         {
@@ -599,28 +1058,13 @@ void custom_SV_ExecuteClientMessage(client_t *cl, msg_t *msg)
     }
     else
     {
-        if(cl->gamestateMessageNum < cl->messageAcknowledge)
+        if (cl->gamestateMessageNum < cl->messageAcknowledge)
         {
             Com_DPrintf("%s : dropped gamestate, resending\n", cl->name);
             SV_SendClientGameState(cl);
         }
     }
 }
-#endif
-
-#if COD_VERSION == COD1_1_5
-void custom_SV_MapRestart_f(void)
-{
-    hook_sv_maprestart_f->unhook();
-    void (*SV_MapRestart_f)();
-    *(int *)&SV_MapRestart_f = hook_sv_maprestart_f->from;
-    SV_MapRestart_f();
-    hook_sv_maprestart_f->hook();
-    
-    if(g_legacyStyle != NULL && g_legacyStyle->integer)
-        toggleLegacyStyle(true);
-}
-#endif
 
 char *custom_va(const char *format, ...)
 {
@@ -639,7 +1083,7 @@ char *custom_va(const char *format, ...)
     va_end( argptr );
 
     if ( ( len = strlen( temp_buffer ) ) >= MAX_VA_STRING )
-        Com_Error( ERR_DROP, "Attempted to overrun string in call to va() \n" );
+        Com_Error( ERR_DROP, "Attempted to overrun string in call to va()\n" );
 
     if ( len + index >= MAX_VA_STRING - 1 )
         index = 0;
@@ -662,9 +1106,9 @@ void custom_SV_ClientThink(int clientNum)
 
     customPlayerState[clientNum].frames++;
 
-    if ( Sys_Milliseconds64() - customPlayerState[clientNum].frameTime >= 1000 )
+    if (Sys_Milliseconds64() - customPlayerState[clientNum].frameTime >= 1000)
     {
-        if ( customPlayerState[clientNum].frames > 1000 )
+        if(customPlayerState[clientNum].frames > 1000)
             customPlayerState[clientNum].frames = 1000;
 
         customPlayerState[clientNum].fps = customPlayerState[clientNum].frames;
@@ -673,7 +1117,6 @@ void custom_SV_ClientThink(int clientNum)
     }
 }
 
-#if COD_VERSION == COD1_1_1
 int custom_ClientEndFrame(gentity_t *ent)
 {
     hook_clientendframe->unhook();
@@ -682,17 +1125,29 @@ int custom_ClientEndFrame(gentity_t *ent)
     int ret = ClientEndFrame(ent);
     hook_clientendframe->hook();
 
-    if ( ent->client->sess.sessionState == STATE_PLAYING )
+    if (ent->client->sess.sessionState == STATE_PLAYING)
     {
         int num = ent - g_entities;
 
-        if ( customPlayerState[num].speed > 0 )
+        if(customPlayerState[num].speed > 0)
             ent->client->ps.speed = customPlayerState[num].speed;
+
+        if(customPlayerState[num].gravity > 0)
+        ent->client->ps.gravity = customPlayerState[num].gravity;
+
+        if(customPlayerState[num].ufo == 1)
+            ent->client->ps.pm_type = PM_UFO;
+
+        // Stop slide after fall damage
+        if (g_resetSlide->integer)
+        {
+            if(ent->client->ps.pm_flags & PMF_SLIDING)
+                ent->client->ps.pm_flags = ent->client->ps.pm_flags & ~PMF_SLIDING;
+        }
     }
 
     return ret;
 }
-#endif
 
 // ioquake3 rate limit connectionless requests
 // https://github.com/ioquake/ioq3/blob/master/code/server/sv_main.c
@@ -784,7 +1239,7 @@ static leakyBucket_t * SVC_BucketForAddress(netadr_t address, int burst, int per
 
 bool SVC_RateLimit(leakyBucket_t *bucket, int burst, int period)
 {
-    if ( bucket != NULL )
+    if (bucket != NULL)
     {
         uint64_t now = Sys_Milliseconds64();
         int interval = now - bucket->lastTime;
@@ -808,20 +1263,18 @@ bool SVC_RateLimit(leakyBucket_t *bucket, int burst, int period)
             return false;
         }
     }
-
     return true;
 }
 
 bool SVC_RateLimitAddress(netadr_t from, int burst, int period)
 {
     leakyBucket_t *bucket = SVC_BucketForAddress(from, burst, period);
-
     return SVC_RateLimit(bucket, burst, period);
 }
 
 bool SVC_callback(const char *str, const char *ip)
 {	
-    if ( codecallback_client_spam && Scr_IsSystemActive() )
+    if (codecallback_client_spam && Scr_IsSystemActive())
     {
         stackPushString(ip);
         stackPushString(str);
@@ -830,28 +1283,27 @@ bool SVC_callback(const char *str, const char *ip)
 
         return true;
     }
-    
     return false;
 }
 
 bool SVC_ApplyRconLimit(netadr_t from, qboolean badRconPassword)
 {
     // Prevent using rcon as an amplifier and make dictionary attacks impractical
-    if ( SVC_RateLimitAddress(from, 10, 1000) )
+    if (SVC_RateLimitAddress(from, 10, 1000))
     {
-        if ( !SVC_callback("RCON:ADDRESS", NET_AdrToString(from)) )
+        if(!SVC_callback("RCON:ADDRESS", NET_AdrToString(from)))
             Com_DPrintf("SVC_RemoteCommand: rate limit from %s exceeded, dropping request\n", NET_AdrToString(from));
         return true;
     }
     
-    if ( badRconPassword )
+    if (badRconPassword)
     {
         static leakyBucket_t bucket;
 
         // Make DoS via rcon impractical
-        if ( SVC_RateLimit(&bucket, 10, 1000) )
+        if (SVC_RateLimit(&bucket, 10, 1000))
         {
-            if ( !SVC_callback("RCON:GLOBAL", NET_AdrToString(from)) )
+            if(!SVC_callback("RCON:GLOBAL", NET_AdrToString(from)))
                 Com_DPrintf("SVC_RemoteCommand: rate limit exceeded, dropping request\n");
             return true;
         }
@@ -863,18 +1315,18 @@ bool SVC_ApplyRconLimit(netadr_t from, qboolean badRconPassword)
 bool SVC_ApplyStatusLimit(netadr_t from)
 {
     // Prevent using getstatus as an amplifier
-    if ( SVC_RateLimitAddress(from, 10, 1000) )
+    if (SVC_RateLimitAddress(from, 10, 1000))
     {
-        if ( !SVC_callback("STATUS:ADDRESS", NET_AdrToString(from)) )
+        if(!SVC_callback("STATUS:ADDRESS", NET_AdrToString(from)))
             Com_DPrintf("SVC_Status: rate limit from %s exceeded, dropping request\n", NET_AdrToString(from));
         return true;
     }
 
     // Allow getstatus to be DoSed relatively easily, but prevent
     // excess outbound bandwidth usage when being flooded inbound
-    if ( SVC_RateLimit(&outboundLeakyBucket, 10, 100) )
+    if (SVC_RateLimit(&outboundLeakyBucket, 10, 100))
     {
-        if ( !SVC_callback("STATUS:GLOBAL", NET_AdrToString(from)) )
+        if(!SVC_callback("STATUS:GLOBAL", NET_AdrToString(from)))
             Com_DPrintf("SVC_Status: rate limit exceeded, dropping request\n");
         return true;
     }
@@ -885,18 +1337,18 @@ bool SVC_ApplyStatusLimit(netadr_t from)
 void hook_SV_GetChallenge(netadr_t from)
 {
     // Prevent using getchallenge as an amplifier
-    if ( SVC_RateLimitAddress(from, 10, 1000) )
+    if (SVC_RateLimitAddress(from, 10, 1000))
     {
-        if ( !SVC_callback("CHALLENGE:ADDRESS", NET_AdrToString(from)) )
+        if(!SVC_callback("CHALLENGE:ADDRESS", NET_AdrToString(from)))
             Com_DPrintf("SV_GetChallenge: rate limit from %s exceeded, dropping request\n", NET_AdrToString(from));
         return;
     }
 
     // Allow getchallenge to be DoSed relatively easily, but prevent
     // excess outbound bandwidth usage when being flooded inbound
-    if ( SVC_RateLimit(&outboundLeakyBucket, 10, 100) )
+    if (SVC_RateLimit(&outboundLeakyBucket, 10, 100))
     {
-        if ( !SVC_callback("CHALLENGE:GLOBAL", NET_AdrToString(from)) )
+        if(!SVC_callback("CHALLENGE:GLOBAL", NET_AdrToString(from)))
             Com_DPrintf("SV_GetChallenge: rate limit exceeded, dropping request\n");
         return;
     }
@@ -907,7 +1359,7 @@ void hook_SV_GetChallenge(netadr_t from)
 void hook_SV_DirectConnect(netadr_t from)
 {
     // Prevent using connect as an amplifier
-    if ( SVC_RateLimitAddress(from, 10, 1000) )
+    if (SVC_RateLimitAddress(from, 10, 1000))
     {
         Com_DPrintf("SV_DirectConnect: rate limit from %s exceeded, dropping request\n", NET_AdrToString(from));
         return;
@@ -915,19 +1367,99 @@ void hook_SV_DirectConnect(netadr_t from)
 
     // Allow connect to be DoSed relatively easily, but prevent
     // excess outbound bandwidth usage when being flooded inbound
-    if ( SVC_RateLimit(&outboundLeakyBucket, 10, 100) )
+    if (SVC_RateLimit(&outboundLeakyBucket, 10, 100))
     {
         Com_DPrintf("SV_DirectConnect: rate limit exceeded, dropping request\n");
         return;
     }
+    
+    bool unbanned;
+    char* userinfo;
+    char ip[16];
+    std::ostringstream oss;
+    std::string argBackup;
+    
+    unbanned = false;
+    userinfo = Cmd_Argv(1);
+    oss << "connect \"" << userinfo << "\"";
+    argBackup = oss.str();
+    snprintf(ip, sizeof(ip), "%d.%d.%d.%d", from.ip[0], from.ip[1], from.ip[2], from.ip[3]);
 
+    auto banInfo = banInfoForIp(ip);
+    if(std::get<0>(banInfo) == true) // banned
+    {
+        time_t current_time = time(NULL);
+        std::string remainingTime;
+        
+        if(std::get<1>(banInfo) != -1) // duration
+        {
+            int elapsed_seconds = difftime(current_time, std::get<2>(banInfo)); // ban date
+            int remaining_seconds = std::get<1>(banInfo) - elapsed_seconds;
+            if (remaining_seconds <= 0)
+            {
+                Cbuf_ExecuteText(EXEC_APPEND, custom_va("unban %s\n", ip));
+                unbanned = true;
+            }
+            else
+            {
+                int days = remaining_seconds / (60 * 60 * 24);
+                int hours = (remaining_seconds % (60 * 60 * 24)) / (60 * 60);
+                int minutes = (remaining_seconds % (60 * 60)) / 60;
+                int seconds = remaining_seconds % 60;
+
+                oss.str(std::string());
+                oss.clear();
+
+                if (days > 0)
+                {
+                    oss << days << " day" << (days > 1 ? "s" : "");
+                    if(hours > 0)
+                        oss << ", " << hours << " hour" << (hours > 1 ? "s" : "");
+                }
+                else if (hours > 0)
+                {
+                    oss << hours << " hour" << (hours > 1 ? "s" : "");
+                    if(minutes > 0)
+                        oss << ", " << minutes << " minute" << (minutes > 1 ? "s" : "");
+                }
+                else if(minutes > 0)
+                    oss << minutes << " minute" << (minutes > 1 ? "s" : "");
+                else
+                    oss << seconds << " second" << (seconds > 1 ? "s" : "");
+
+                remainingTime = oss.str();
+            }
+        }
+
+        if (!unbanned)
+        {
+            std::string banInfoMessage = "error\nBanned IP";
+            if(std::get<3>(banInfo) != "none")
+            {
+                banInfoMessage.append(" - Reason: ");
+                banInfoMessage.append(std::get<3>(banInfo));
+            }
+            if(!remainingTime.empty())
+            {
+                banInfoMessage.append(" - Remaining: ");
+                banInfoMessage.append(remainingTime);
+            }
+            
+            Com_Printf("rejected connection from banned IP %s\n", NET_AdrToString(from));
+            NET_OutOfBandPrint(NS_SERVER, from, banInfoMessage.c_str());
+            return;
+        }
+    }
+
+    if(unbanned)
+        Cmd_TokenizeString(argBackup.c_str());
     SV_DirectConnect(from);
 }
 
 void hook_SV_AuthorizeIpPacket(netadr_t from)
 {
     // Prevent ipAuthorize log spam DoS
-    if ( SVC_RateLimitAddress(from, 20, 1000) )
+    if (SVC_RateLimitAddress(from, 20, 1000))
     {
         Com_DPrintf("SV_AuthorizeIpPacket: rate limit from %s exceeded, dropping request\n", NET_AdrToString(from));
         return;
@@ -935,7 +1467,7 @@ void hook_SV_AuthorizeIpPacket(netadr_t from)
 
     // Allow ipAuthorize to be DoSed relatively easily, but prevent
     // excess outbound bandwidth usage when being flooded inbound
-    if ( SVC_RateLimit(&outboundLeakyBucket, 10, 100) )
+    if (SVC_RateLimit(&outboundLeakyBucket, 10, 100))
     {
         Com_DPrintf("SV_AuthorizeIpPacket: rate limit exceeded, dropping request\n");
         return;
@@ -947,18 +1479,18 @@ void hook_SV_AuthorizeIpPacket(netadr_t from)
 void hook_SVC_Info(netadr_t from)
 {
     // Prevent using getinfo as an amplifier
-    if ( SVC_RateLimitAddress(from, 10, 1000) )
+    if (SVC_RateLimitAddress(from, 10, 1000))
     {
-        if ( !SVC_callback("INFO:ADDRESS", NET_AdrToString(from)) )
+        if (!SVC_callback("INFO:ADDRESS", NET_AdrToString(from)))
             Com_DPrintf("SVC_Info: rate limit from %s exceeded, dropping request\n", NET_AdrToString(from));
         return;
     }
 
     // Allow getinfo to be DoSed relatively easily, but prevent
     // excess outbound bandwidth usage when being flooded inbound
-    if ( SVC_RateLimit(&outboundLeakyBucket, 10, 100) )
+    if (SVC_RateLimit(&outboundLeakyBucket, 10, 100))
     {
-        if ( !SVC_callback("INFO:GLOBAL", NET_AdrToString(from)) )
+        if (!SVC_callback("INFO:GLOBAL", NET_AdrToString(from)))
             Com_DPrintf("SVC_Info: rate limit exceeded, dropping request\n");
         return;
     }
@@ -968,18 +1500,43 @@ void hook_SVC_Info(netadr_t from)
 
 void hook_SVC_Status(netadr_t from)
 {
-    if ( SVC_ApplyStatusLimit(from) )
+    if (SVC_ApplyStatusLimit(from))
         return;
-    
     SVC_Status(from);
 }
 
+// See https://nachtimwald.com/2017/04/02/constant-time-string-comparison-in-c/
+bool str_iseq(const char *s1, const char *s2)
+{
+    int             m = 0;
+    volatile size_t i = 0;
+    volatile size_t j = 0;
+    volatile size_t k = 0;
+
+    if (s1 == NULL || s2 == NULL)
+        return false;
+
+    while (1) {
+        m |= s1[i]^s2[j];
+
+        if (s1[i] == '\0')
+            break;
+        i++;
+
+        if (s2[j] != '\0')
+            j++;
+        if (s2[j] == '\0')
+            k++;
+    }
+
+    return m == 0;
+}
 void hook_SVC_RemoteCommand(netadr_t from, msg_t *msg)
 {
     char* password = Cmd_Argv(1);
-    qboolean badRconPassword = !strlen(sv_rconPassword->string) || !strcmp_constant_time(password, sv_rconPassword->string);
+    qboolean badRconPassword = !strlen(sv_rconPassword->string) || !str_iseq(password, sv_rconPassword->string);
     
-    if ( SVC_ApplyRconLimit(from, badRconPassword) )
+    if (SVC_ApplyRconLimit(from, badRconPassword))
         return;
     
     SVC_RemoteCommand(from, msg);
@@ -992,9 +1549,9 @@ void ServerCrash(int sig)
     void *array[20];
     size_t size = backtrace(array, 20);
 
-    // Write to crash log ...
+    // Write to crash log
     fp = fopen("./crash.log", "a");
-    if ( fp )
+    if (fp)
     {
         fd = fileno(fp);
         fseek(fp, 0, SEEK_END);
@@ -1002,9 +1559,12 @@ void ServerCrash(int sig)
         fflush(fp);
         backtrace_symbols_fd(array, size, fd);
     }
-    // ... and stderr
+    
+    // Write to stderr
     fprintf(stderr, "Error: Server crashed with signal 0x%x {%d}\n", sig, sig);
     backtrace_symbols_fd(array, size, STDERR_FILENO);
+    
+    system("stty sane");
     exit(1);
 }
 
@@ -1030,7 +1590,7 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     fp = fopen("/proc/self/maps", "r");
     if(!fp)
         return 0;
-    while(fgets(buf, sizeof(buf), fp))
+    while (fgets(buf, sizeof(buf), fp))
     {
         if(!strstr(buf, libPath))
             continue;
@@ -1041,24 +1601,33 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     fclose(fp);
     
     g_entities = (gentity_t*)dlsym(ret, "g_entities");
+    g_clients = (gclient_t*)dlsym(ret, "g_clients");
+    level = (level_locals_t*)dlsym(ret, "level");
     pm = (pmove_t*)dlsym(ret, "pm");
+    scr_const = (stringIndex_t*)dlsym(ret, "scr_const");
 
     Scr_GetFunctionHandle = (Scr_GetFunctionHandle_t)dlsym(ret, "Scr_GetFunctionHandle");
     Scr_GetNumParam = (Scr_GetNumParam_t)dlsym(ret, "Scr_GetNumParam");
-    SV_Cmd_ArgvBuffer = (SV_Cmd_ArgvBuffer_t)dlsym(ret, "trap_Argv");
+    trap_Argv = (trap_Argv_t)dlsym(ret, "trap_Argv");
     ClientCommand = (ClientCommand_t)dlsym(ret, "ClientCommand");
+    Com_SkipRestOfLine = (Com_SkipRestOfLine_t)dlsym(ret, "Com_SkipRestOfLine");
+    Com_ParseRestOfLine = (Com_ParseRestOfLine_t)dlsym(ret, "Com_ParseRestOfLine");
+    Com_ParseInt = (Com_ParseInt_t)dlsym(ret, "Com_ParseInt");
     Scr_GetFunction = (Scr_GetFunction_t)dlsym(ret, "Scr_GetFunction");
     Scr_GetMethod = (Scr_GetMethod_t)dlsym(ret, "Scr_GetMethod");
-    SV_GameSendServerCommand = (SV_GameSendServerCommand_t)dlsym(ret, "trap_SendServerCommand");
+    trap_SendServerCommand = (trap_SendServerCommand_t)dlsym(ret, "trap_SendServerCommand");
     Scr_ExecThread = (Scr_ExecThread_t)dlsym(ret, "Scr_ExecThread");
     Scr_ExecEntThread = (Scr_ExecEntThread_t)dlsym(ret, "Scr_ExecEntThread");
     Scr_ExecEntThreadNum = (Scr_ExecEntThreadNum_t)dlsym(ret, "Scr_ExecEntThreadNum");
     Scr_FreeThread = (Scr_FreeThread_t)dlsym(ret, "Scr_FreeThread");
     Scr_Error = (Scr_Error_t)dlsym(ret, "Scr_Error");
+    Scr_ObjectError = (Scr_ObjectError_t)dlsym(ret, "Scr_ObjectError");
+    Scr_GetConstString = (Scr_GetConstString_t)dlsym(ret, "Scr_GetConstString");
+    Scr_ParamError = (Scr_ParamError_t)dlsym(ret, "Scr_ParamError");
     G_Say = (G_Say_t)dlsym(ret, "G_Say");
     G_RegisterCvars = (G_RegisterCvars_t)dlsym(ret, "G_RegisterCvars");
-    SV_GetConfigstringConst = (SV_GetConfigstringConst_t)dlsym(ret, "trap_GetConfigstringConst");
-    SV_GetConfigstring = (SV_GetConfigstring_t)dlsym(ret, "trap_GetConfigstring");
+    trap_GetConfigstringConst = (trap_GetConfigstringConst_t)dlsym(ret, "trap_GetConfigstringConst");
+    trap_GetConfigstring = (trap_GetConfigstring_t)dlsym(ret, "trap_GetConfigstring");
     BG_GetNumWeapons = (BG_GetNumWeapons_t)dlsym(ret, "BG_GetNumWeapons");
     BG_GetInfoForWeapon = (BG_GetInfoForWeapon_t)dlsym(ret, "BG_GetInfoForWeapon");
     BG_GetWeaponIndexForName = (BG_GetWeaponIndexForName_t)dlsym(ret, "BG_GetWeaponIndexForName");
@@ -1082,26 +1651,14 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     Q_strlwr = (Q_strlwr_t)dlsym(ret, "Q_strlwr");
     Q_strupr = (Q_strupr_t)dlsym(ret, "Q_strupr");
     Q_strcat = (Q_strcat_t)dlsym(ret, "Q_strcat");
+    Q_strncpyz = (Q_strncpyz_t)dlsym(ret, "Q_strncpyz");
+    Q_CleanStr = (Q_CleanStr_t)dlsym(ret, "Q_CleanStr");
 
-#if COD_VERSION == COD1_1_1
     hook_call((int)dlsym(ret, "vmMain") + 0xB0, (int)hook_ClientCommand);
     hook_call((int)dlsym(ret, "ClientEndFrame") + 0x311, (int)hook_StuckInClient);
-#elif COD_VERSION == COD1_1_5
-    hook_call((int)dlsym(ret, "vmMain") + 0xF0, (int)hook_ClientCommand);
-#endif
-
-#if COD_VERSION == COD1_1_5
-    hook_jmp((int)dlsym(ret, "PM_GetEffectiveStance") + 0x16C1, (int)hook_PM_WalkMove_Naked);
-    resume_addr_PM_WalkMove = (uintptr_t)dlsym(ret, "PM_GetEffectiveStance") + 0x18AA;
-    hook_jmp((int)dlsym(ret, "PM_SlideMove") + 0xB6A, (int)hook_PM_SlideMove_Naked);
-    resume_addr_PM_SlideMove = (uintptr_t)dlsym(ret, "PM_SlideMove") + 0xBA5;
-    hook_jmp((int)dlsym(ret, "PM_GetEffectiveStance") + 0xAD, (int)custom_Jump_GetLandFactor);
-    hook_jmp((int)dlsym(ret, "PM_GetEffectiveStance") + 0x4C, (int)custom_PM_GetReducedFriction);
-#endif
 
     hook_jmp((int)dlsym(ret, "G_LocalizedStringIndex"), (int)custom_G_LocalizedStringIndex);
 
-#if COD_VERSION == COD1_1_1
     // Patch codmsgboom
     /* See:
     - https://aluigi.altervista.org/adv/codmsgboom-adv.txt
@@ -1109,6 +1666,7 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     */
     *(int*)((int)dlsym(ret, "G_Say") + 0x50e) = 0x37f;
     *(int*)((int)dlsym(ret, "G_Say") + 0x5ca) = 0x37f;
+    // end
 
     // 1.1 deadchat support
     /* See:
@@ -1119,17 +1677,14 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     hook_call((int)dlsym(ret, "G_Say") + 0x5EA, (int)hook_G_Say);
     hook_call((int)dlsym(ret, "G_Say") + 0x77D, (int)hook_G_Say);
     hook_call((int)dlsym(ret, "G_Say") + 0x791, (int)hook_G_Say);
-#endif
+    // end
 
     hook_gametype_scripts = new cHook((int)dlsym(ret, "GScr_LoadGameTypeScript"), (int)custom_GScr_LoadGameTypeScript);
     hook_gametype_scripts->hook();
-
-#if COD_VERSION == COD1_1_1
     hook_play_movement = new cHook((int)dlsym(ret, "ClientThink"), (int)custom_SV_ClientThink);
     hook_play_movement->hook();
     hook_clientendframe = new cHook((int)dlsym(ret, "ClientEndFrame"), (int)custom_ClientEndFrame);
     hook_clientendframe->hook();
-#endif
 
     return ret;
 }
@@ -1149,22 +1704,13 @@ public:
         // Otherwise the printf()'s are printed at crash/end on older os/compiler versions
         setbuf(stdout, NULL);
 
-#if COD_VERSION == COD1_1_1
         printf("> [VCODLIB] Compiled for: CoD1 1.1\n");
-        printf("> [VCODLIB] VCODLIB based on LIBCOD1\n");
-        printf("> [VCODLIB] Special thanks to Raphael\n");
-#elif COD_VERSION == COD1_1_5
-        printf("> [VCODLIB] Compiled for: CoD1 1.5\n");
-        printf("> [VCODLIB] VCODLIB based on LIBCOD1\n");
-        printf("> [VCODLIB] Special thanks to Raphael\n");
-#endif
-
+        printf("> [VCODLIB] Special thanks to raphael and libcod1\n");
         printf("> [VCODLIB] Compiled %s %s using GCC %s\n", __DATE__, __TIME__, __VERSION__);
 
         // Allow to write in executable memory
         mprotect((void *)0x08048000, 0x135000, PROT_READ | PROT_WRITE | PROT_EXEC);
 
-#if COD_VERSION == COD1_1_1
         hook_call(0x08085213, (int)hook_AuthorizeState);
         hook_call(0x08094c54, (int)Scr_GetCustomFunction);
         hook_call(0x080951c4, (int)Scr_GetCustomMethod);
@@ -1204,33 +1750,8 @@ public:
         hook_sv_begindownload_f->hook();
         hook_sv_sendclientgamestate = new cHook(0x08085eec, (int)custom_SV_SendClientGameState);
         hook_sv_sendclientgamestate->hook();
-#elif COD_VERSION == COD1_1_5
-        hook_call(0x080894c5, (int)hook_AuthorizeState);
-        hook_call(0x0809d8f5, (int)Scr_GetCustomFunction);
-        hook_call(0x0809db31, (int)Scr_GetCustomMethod);
-        hook_call(0x08093651, (int)hook_SV_GetChallenge);
-        hook_call(0x0809370b, (int)hook_SV_DirectConnect);
-        hook_call(0x0809374e, (int)hook_SV_AuthorizeIpPacket);
-        hook_call(0x0809360e, (int)hook_SVC_Info);
-        hook_call(0x080935cb, (int)hook_SVC_Status);
-        hook_call(0x08093798, (int)hook_SVC_RemoteCommand);
-
-        // Patch RCON half-second limit
-        *(unsigned char*)0x080930e9 = 0xeb;
-
-        hook_sys_loaddll = new cHook(0x080d3cdd, (int)custom_Sys_LoadDll);
-        hook_sys_loaddll->hook();
-        hook_cvar_set2 = new cHook(0x08072da8, (int)custom_Cvar_Set2);
-        hook_cvar_set2->hook();
-        hook_com_init = new cHook(0x08070ef8, (int)custom_Com_Init);
-        hook_com_init->hook();
-        hook_sv_spawnserver = new cHook(0x08090d0f, (int)custom_SV_SpawnServer);
-        hook_sv_spawnserver->hook();
-        hook_sv_begindownload_f = new cHook(0x0808b456, (int)custom_SV_BeginDownload_f);
-        hook_sv_begindownload_f->hook();
-        hook_sv_maprestart_f = new cHook(0x0808773a, (int)custom_SV_MapRestart_f);
-        hook_sv_maprestart_f->hook();
-#endif
+        hook_sv_addoperatorcommands = new cHook(0x08084a3c, (int)custom_SV_AddOperatorCommands);
+        hook_sv_addoperatorcommands->hook();
 
         printf("> [PLUGIN LOADED]\n");
     }

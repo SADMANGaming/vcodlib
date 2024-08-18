@@ -1,9 +1,6 @@
 #ifndef _GSC_HPP_
 #define _GSC_HPP_
 
-#define COD1_1_1 111
-#define COD1_1_5 115
-
 /* default stuff */
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,18 +24,23 @@
 #include "functions.hpp"
 
 #include "gsc_entity.hpp"
-
-#if COD_VERSION == COD1_1_5
+#include "gsc_exec.hpp"
+#include "gsc_player.hpp"
+#include "gsc_utils.hpp"
+#include "gsc_weapons.hpp"
 #include "jump.hpp"
-#endif
+#include "gsc_bots.hpp"
 
 #if COMPILE_SQLITE == 1
 #include "gsc_sqlite.hpp"
 #endif
 
-#include "gsc_player.hpp"
-#include "gsc_utils.hpp"
-#include "gsc_weapons.hpp"
+
+
+
+
+
+
 
 #define STACK_UNDEFINED 0
 #define STACK_STRING 1
@@ -63,10 +65,6 @@
 
 #ifndef Q_vsnprintf
 int Q_vsnprintf(char *s0, size_t size, const char *fmt, va_list args);
-#endif
-
-#ifndef strcmp_constant_time
-int strcmp_constant_time(const char *s1, const char *s2);
 #endif
 
 int stackGetParams(const char *params, ...);

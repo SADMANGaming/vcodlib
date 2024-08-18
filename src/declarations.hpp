@@ -9,6 +9,8 @@
 #define qtrue 1
 #define qfalse 0
 
+
+
 // 3D vectors
 #define VectorCopy( a, b )          ( ( b )[0] = ( a )[0],( b )[1] = ( a )[1],( b )[2] = ( a )[2] )
 #define VectorScale( v, s, o )      ( ( o )[0] = ( v )[0] * ( s ),( o )[1] = ( v )[1] * ( s ),( o )[2] = ( v )[2] * ( s ) )
@@ -16,6 +18,11 @@
 #define BIG_INFO_STRING             0x2000
 #define GENTITYNUM_BITS             10
 #define PACKET_BACKUP               32
+
+#define SNAPFLAG_SERVERCOUNT        4
+
+#define GAME_INIT_FRAMES            3
+#define FRAMETIME                   100
 
 #define MAX_CHALLENGES              1024
 #define MAX_CLIENTS                 64
@@ -39,31 +46,44 @@
 
 #define SVF_SINGLECLIENT        0x800
 
+#define KEY_MASK_NONE       0
 #define KEY_MASK_FORWARD    127
-#define KEY_MASK_BACK       129
+#define KEY_MASK_BACK       -127
 #define KEY_MASK_MOVERIGHT  127
-#define KEY_MASK_MOVELEFT   129
+#define KEY_MASK_MOVELEFT   -127
 #define KEY_MASK_MOVEUP     127
-#define KEY_MASK_MOVEDOWN   129
+#define KEY_MASK_MOVEDOWN   -127
+
+#define KEY_MASK_FIRE           0x1
+#define KEY_MASK_MELEE          0x4
 
 #define KEY_MASK_RELOAD         0x8
 #define KEY_MASK_LEANLEFT       0x10
 #define KEY_MASK_LEANRIGHT      0x20
 #define KEY_MASK_ADS_MODE       0x10
 
+#define KEY_MASK_PRONE          0x100
+#define KEY_MASK_CROUCH         0x200
+#define KEY_MASK_JUMP           0x400
+
 // playerState_t->eFlags
 // entityState_t->eFlags
 #define EF_CROUCHING    0x20
 #define EF_PRONE        0x40
+#define EF_STAND        0x60
 
-#if COD_VERSION == COD1_1_5
-#define PMF_JUMPING         0x2000
-#endif
+#define PMF_LADDER          0x10
+#define PMF_SLIDING         0x100
+
+typedef void (*xcommand_t)(void);
 
 typedef unsigned char byte;
 typedef signed char sbyte;
 typedef struct gclient_s gclient_t;
 typedef struct gentity_s gentity_t;
+
+
+
 
 typedef struct scr_entref_s
 {
@@ -112,6 +132,17 @@ typedef enum
 
 typedef enum
 {
+    TEAM_FREE = 0x0,
+    TEAM_NONE = 0x0,
+    TEAM_BAD = 0x0,
+    TEAM_AXIS = 0x1,
+    TEAM_ALLIES = 0x2,
+    TEAM_SPECTATOR = 0x3,
+    TEAM_NUM_TEAMS = 0x4,
+} team_t;
+
+typedef enum
+{
     CS_FREE,
     CS_ZOMBIE,
     CS_CONNECTED,
@@ -126,6 +157,13 @@ typedef enum
     STATE_SPECTATOR,
     STATE_INTERMISSION
 } sessionState_t;
+
+typedef enum
+{
+    CON_DISCONNECTED,
+    CON_CONNECTING,
+    CON_CONNECTED
+} clientConnected_t;
 
 typedef enum
 {
@@ -201,31 +239,12 @@ typedef struct
 typedef struct
 {
     const char *fieldBuffer;
-    struct HunkUser *programHunkUser;
-    uint16_t canonicalStrCount;
-    byte developer;
-    byte developer_script;
-    byte evaluate;
-    byte pad[3];
-    const char *error_message;
-    int error_index;
-    unsigned int time;
-    unsigned int timeArrayId;
-    unsigned int pauseArrayId;
+    byte pad[0x4176];
     unsigned int levelId;
-    unsigned int gameId;
-    unsigned int animId;
-    unsigned int freeEntList;
-    unsigned int tempVariable;
-    byte bInited;
-    byte pad2;
-    uint16_t savecount;
-    unsigned int checksum;
-    unsigned int entId;
-    unsigned int entFieldName;
+    // ...
     const char *programBuffer;
-    const char *endScriptBuffer;
-} scrVarPub_t; // TODO: verify
+    // ... 
+} scrVarPub_t; // TODO: finish setup
 
 typedef struct
 {
@@ -233,9 +252,9 @@ typedef struct
     byte pad[356];
     VariableValue *top;
     //...
-} scrVmPub_t;
+} scrVmPub_t; // TODO: verify
 
-typedef int	fileHandle_t;
+typedef int fileHandle_t;
 typedef void *unzFile;
 typedef void (*xfunction_t)();
 typedef void (*xmethod_t)(scr_entref_t);
@@ -258,6 +277,14 @@ struct directory_t
 {
     char path[MAX_OSPATH];
     char gamedir[MAX_OSPATH];
+};
+
+enum fsMode_t
+{
+    FS_READ,
+    FS_WRITE,
+    FS_APPEND,
+    FS_APPEND_SYNC
 };
 
 struct pack_t
@@ -342,10 +369,6 @@ typedef struct
     int firstPing;
     qboolean connected;
     int guid;
-#if COD_VERSION == COD1_1_5
-    char pbguid[64];
-    int ipAuthorize;
-#endif
 } challenge_t;
 
 typedef enum
@@ -488,20 +511,23 @@ typedef struct playerState_s
     unsigned int weapon;
     weaponstate_t weaponstate;
     float fWeaponPosFrac;
-    int adsDelayTime;
-    //TODO: check if one of two the above is "int viewmodelIndex" instead
+    int viewmodelIndex;
     vec3_t viewangles;
-#if COD_VERSION == COD1_1_1
-    byte pad[8196];
-#elif COD_VERSION == COD1_1_5
-    byte pad[8192];
-#endif
+    int viewHeightTarget;
+    float viewHeightCurrent;
+    byte pad[8188];
 } playerState_t;
 
-#if COD_VERSION == COD1_1_1
 typedef struct
 {
     sessionState_t sessionState;
+    int forceSpectatorClient;
+    int statusIcon;
+    int archiveTime;
+    int score;
+    int deaths;
+    byte pad[4];
+    clientConnected_t connected;
     //...
 } clientSession_t;
 
@@ -509,9 +535,11 @@ struct gclient_s
 {
     playerState_t ps;
     clientSession_t sess;
+    int spectatorClient;
+    qboolean noclip;
+    qboolean ufo;
     //...
 };
-#endif
 
 struct gentity_s
 {
@@ -537,8 +565,8 @@ typedef struct
 typedef struct client_s
 {
     clientConnectState_t state;
-    qboolean delayed;
-    const char *delayDropMsg;
+    qboolean sendAsActive;
+    const char *dropReason;
     char userinfo[MAX_INFO_STRING];
     reliableCommands_t	reliableCommands[MAX_RELIABLE_COMMANDS];
     int reliableSequence;
@@ -563,13 +591,6 @@ typedef struct client_s
     int downloadBlockSize[MAX_DOWNLOAD_WINDOW];
     qboolean downloadEOF;
     int downloadSendTime;
-#if COD_VERSION == COD1_1_5
-    char wwwDownloadURL[MAX_OSPATH];
-    qboolean wwwDownload;
-    qboolean wwwDownloadStarted;
-    qboolean wwwDlAck;
-    qboolean wwwDl_failed;
-#endif
     int deltaMessage;
     int nextReliableTime;
     int lastPacketTime;
@@ -583,15 +604,9 @@ typedef struct client_s
     int snapshotMsec;
     int pureAuthentic;
     netchan_t netchan;
-#if COD_VERSION == COD1_1_5
-    int guid;
-#endif
     unsigned short clscriptid;
-    int bot;
+    int bIsTestClient;
     int serverId;
-#if COD_VERSION == COD1_1_5
-    char PBguid[33];
-#endif
 } client_t;
 
 typedef struct
@@ -599,12 +614,28 @@ typedef struct
     qboolean initialized;
     int time;
     int snapFlagServerBit;
-#if COD_VERSION == COD1_1_5
-    byte pad[2];
-#endif
     client_t *clients;
     //...
 } serverStatic_t;
+
+typedef struct
+{
+    struct gclient_s *clients;
+    byte pad[0x1DC];
+    int maxclients;
+    int framenum;
+    int time;
+    int previousTime;
+    int frameTime;
+    int startTime;
+    int teamScores[TEAM_NUM_TEAMS];
+    int lastTeammateHealthTime;
+    qboolean bUpdateScoresForIntermission;
+    int manualNameChange;
+    int numConnectedClients;
+    int sortedClients[MAX_CLIENTS];
+    // ...
+} level_locals_t;
 
 typedef enum
 {
@@ -612,6 +643,14 @@ typedef enum
     SS_LOADING,
     SS_GAME
 } serverState_t;
+
+typedef struct
+{
+    serverState_t state;
+    qboolean restarting;
+    int start_frameTime;
+    // ...
+} server_t;
 
 enum clc_ops_e
 {
@@ -626,6 +665,13 @@ enum svscmd_type
     SV_CMD_CAN_IGNORE = 0x0,
     SV_CMD_RELIABLE = 0x1,
 };
+
+typedef enum
+{
+    EXEC_NOW,
+    EXEC_INSERT,
+    EXEC_APPEND
+} cbufExec_t;
 
 typedef struct WeaponDef_t
 {
@@ -647,33 +693,10 @@ typedef struct WeaponDef_t
     float idleCrouchFactor;
     float idleProneFactor;
     byte pad5[0x50];
-#if COD_VERSION == COD1_1_5
-    int rechamberWhileAds;
-    float adsViewErrorMin;
-    float adsViewErrorMax;
-#endif
     int cookOffHold;
     int clipOnly;
-#if COD_VERSION == COD1_1_5
-    byte pad6[0x144];
-    float OOPosAnimLength[2];
-#endif
     //...
 } WeaponDef_t;
-
-#if COD_VERSION == COD1_1_5
-struct WeaponProperties // Custom struct for g_legacyStyle
-{
-    int reloadAddTime;
-    int adsTransInTime;
-    float adsZoomInFrac;
-    float idleCrouchFactor;
-    float idleProneFactor;
-    int rechamberWhileAds;
-    float adsViewErrorMin;
-    float adsViewErrorMax;
-};
-#endif
 
 struct pmove_t
 {
@@ -682,58 +705,48 @@ struct pmove_t
     //...
 };
 
+typedef struct
+{
+    byte pad[4];
+    unsigned short allies;
+    byte pad2[2];
+    unsigned short axis;
+    byte pad3[114];
+    unsigned short spectator;
+    byte pad4[122];
+    unsigned short none;
+    // ...
+} stringIndex_t;
+
 extern gentity_t *g_entities;
+extern gclient_t *g_clients;
+extern stringIndex_t *scr_const;
 
-#if COD_VERSION == COD1_1_1
-static const int varpub_offset = 0x082f17d8;
-#elif COD_VERSION == COD1_1_5
-static const int varpub_offset = 0x08306cb8;
-#endif
-
-#if COD_VERSION == COD1_1_1
-static const int vmpub_offset = 0x082f57e0;
-#elif COD_VERSION == COD1_1_5
-static const int vmpub_offset = 0x0830acc0;
-#endif
-
-#if COD_VERSION == COD1_1_1
-static const int svs_offset = 0x083b67a0;
-#elif COD_VERSION == COD1_1_5
-static const int svs_offset = 0x083ccd80;
-#endif
-
-#if COD_VERSION == COD1_1_1
+static const int com_frameTime_offset = 0x0833df1c;
 static const int fs_searchpaths_offset = 0x080dd590;
-#elif COD_VERSION == COD1_1_5
-static const int fs_searchpaths_offset = 0x080e8c30;
-#endif
-
-#if COD_VERSION == COD1_1_1
 static const int sv_serverId_value_offset = 0x080e30c0;
-#endif
+static const int sv_offset = 0x08355260;
+static const int svs_offset = 0x083b67a0;
+static const int varpub_offset = 0x082f17d8;
+static const int vmpub_offset = 0x082f57e0;
 
+#define com_frameTime (*((int*)( com_frameTime_offset )))
+#define fs_searchpaths (*((searchpath_t**)( fs_searchpaths_offset )))
 #define scrVarPub (*((scrVarPub_t*)( varpub_offset )))
 #define scrVmPub (*((scrVmPub_t*)( vmpub_offset )))
-#define svs (*((serverStatic_t*)( svs_offset )))
-#define fs_searchpaths (*((searchpath_t**)( fs_searchpaths_offset )))
-#if COD_VERSION == COD1_1_1
+#define sv (*((server_t*)( sv_offset )))
 #define sv_serverId_value (*((int*)( sv_serverId_value_offset )))
-#endif
+#define svs (*((serverStatic_t*)( svs_offset )))
 
 // Check for critical structure sizes and fail if not match
 #if __GNUC__ >= 6
 
 static_assert((sizeof(netchan_t) == 32832), "ERROR: netchan_t size is invalid!");
 static_assert((sizeof(entityState_t) == 240), "ERROR: entityState_t size is invalid!");
-#if COD_VERSION == COD1_1_1
 static_assert((sizeof(client_t) == 370940), "ERROR: client_t size is invalid!");
 static_assert((sizeof(playerState_t) == 8400), "ERROR: playerState_t size is invalid!");
 static_assert((sizeof(entityShared_t) == 100), "ERROR: entityShared_t size is invalid!");
 static_assert((sizeof(gentity_t) == 788), "ERROR: gentity_t size is invalid!");
-#elif COD_VERSION == COD1_1_5
-static_assert((sizeof(client_t) == 371124), "ERROR: client_t size is invalid!");
-static_assert((sizeof(playerState_t) == 8396), "ERROR: playerState_t size is invalid!");
-#endif
 
 #endif
 
@@ -752,9 +765,15 @@ typedef struct src_error_s
 typedef struct customPlayerState_s
 {
     int speed;
+    int gravity;
     int fps;
     int frames;
     uint64_t frameTime;
+    int ufo;
+	int botButtons;
+	int botWeapon;
+	char botForwardMove;
+	char botRightMove;
 } customPlayerState_t;
 
 typedef struct callback_s

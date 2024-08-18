@@ -3,6 +3,8 @@
 
 #include "gsc.hpp"
 
+
+
 void gsc_player_setvelocity(scr_entref_t ref);
 void gsc_player_getvelocity(scr_entref_t ref);
 void gsc_player_button_ads(scr_entref_t ref);
@@ -25,5 +27,17 @@ void gsc_player_processclientcommand(scr_entref_t ref);
 void gsc_player_dropclient(scr_entref_t ref);
 void gsc_player_setspeed(scr_entref_t ref);
 void gsc_player_getfps(scr_entref_t ref);
+void gsc_player_isonladder(scr_entref_t ref);
+void gsc_player_setufo(scr_entref_t ref);
+void gsc_player_connectionlesspackettoclient(scr_entref_t ref);
+
+//void gsc_player_setstance(scr_entref_t ref);
+void gsc_player_setgravity(scr_entref_t ref);
+void gsc_player_isbot(scr_entref_t ref);
+void gsc_player_getlastconnecttime(scr_entref_t ref);
+
+
+//void G_AddPredictableEvent(gentity_t *entity, int event, int eventParam);
+
 
 #endif

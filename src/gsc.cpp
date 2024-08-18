@@ -1,31 +1,24 @@
 #include "gsc.hpp"
-#include "vcodlib.hpp"
 
 #include <stdint.h>
 #include <sys/time.h>
 
 scr_function_t scriptFunctions[] =
 {
-    #if ENABLE_UNSAFE == 1
+#if ENABLE_UNSAFE == 1
     {"file_exists", gsc_utils_file_exists, 0},
     {"fopen", gsc_utils_fopen, 0},
     {"fwrite", gsc_utils_fwrite, 0},
     {"fread", gsc_utils_fread, 0},
     {"fclose", gsc_utils_fclose, 0},
-    #endif
+#endif
 
-    #if COMPILE_SQLITE == 1
-    {"sqlite_open", gsc_sqlite_open, 0},
-    {"sqlite_query", gsc_sqlite_query, 0},
-    {"sqlite_close", gsc_sqlite_close, 0},
-    {"sqlite_escape_string", gsc_sqlite_escape_string, 0},
-    {"sqlite_databases_count", gsc_sqlite_databases_count, 0},
-    {"sqlite_tasks_count", gsc_sqlite_tasks_count, 0},
-    {"async_sqlite_initialize", gsc_async_sqlite_initialize, 0},
-    {"async_sqlite_create_query", gsc_async_sqlite_create_query, 0},
-    {"async_sqlite_create_query_nosave", gsc_async_sqlite_create_query_nosave, 0},
-    {"async_sqlite_checkdone", gsc_async_sqlite_checkdone, 0},
-    #endif
+    {"execute", gsc_exec, 0},
+#if 0
+    {"execute_async_create", gsc_exec_async_create, 0},
+    {"execute_async_create_nosave", gsc_exec_async_create_nosave, 0},
+    {"execute_async_checkdone", gsc_exec_async_checkdone, 0},
+#endif
 
     {"sendCommandToClient", gsc_utils_sendcommandtoclient, 0},
     {"logPrintConsole", gsc_utils_logprintconsole, 0},
@@ -38,11 +31,33 @@ scr_function_t scriptFunctions[] =
     {"getSystemTime", gsc_utils_getsystemtime, 0},
     {"getConfigString", gsc_utils_getconfigstring, 0},
     {"makeLocalizedString", gsc_utils_makelocalizedstring, 0},
+    {"ban", gsc_utils_ban, 0},
+    {"unban", gsc_utils_unban, 0},
 
     // Weapons
     {"setWeaponCookable", gsc_weapons_setweaponcookable, 0},
     {"setWeaponFuseTime", gsc_weapons_setweaponfusetime, 0},
-    //
+    
+
+    
+#if COMPILE_SQLITE == 1
+    {"sqlite_open", gsc_sqlite_open, 0},
+    {"sqlite_query", gsc_sqlite_query, 0},
+    {"sqlite_close", gsc_sqlite_close, 0},
+    {"sqlite_escape_string", gsc_sqlite_escape_string, 0},
+    {"sqlite_databases_count", gsc_sqlite_databases_count, 0},
+    {"sqlite_tasks_count", gsc_sqlite_tasks_count, 0},
+#if 0
+    {"async_sqlite_initialize", gsc_async_sqlite_initialize, 0},
+    {"async_sqlite_create_query", gsc_async_sqlite_create_query, 0},
+    {"async_sqlite_create_query_nosave", gsc_async_sqlite_create_query_nosave, 0},
+    {"async_sqlite_checkdone", gsc_async_sqlite_checkdone, 0},
+#endif
+#endif
+
+#if COMPILE_LIBCURL == 1
+    {"webhookMessage", gsc_utils_webhookmessage, 0}, // From Kazam pull request #8
+#endif
 
     {"testFunction", gsc_testfunction, 0},
     {NULL, NULL, 0} // Terminator
@@ -51,12 +66,12 @@ scr_function_t scriptFunctions[] =
 xfunction_t Scr_GetCustomFunction(const char **fname, int *fdev)
 {
     xfunction_t m = Scr_GetFunction(fname, fdev);
-    if ( m )
+    if(m)
         return m;
 
-    for ( int i = 0; scriptFunctions[i].name; i++ )
+    for (int i = 0; scriptFunctions[i].name; i++)
     {
-        if ( strcasecmp(*fname, scriptFunctions[i].name) )
+        if(strcasecmp(*fname, scriptFunctions[i].name))
             continue;
 
         scr_function_t func = scriptFunctions[i];
@@ -64,17 +79,11 @@ xfunction_t Scr_GetCustomFunction(const char **fname, int *fdev)
         *fdev = func.developer;
         return func.call;
     }
-
     return NULL;
 }
 
 scr_method_t scriptMethods[] =
 {
-    #if COMPILE_SQLITE == 1
-    {"async_sqlite_create_entity_query", gsc_async_sqlite_create_entity_query, 0},
-    {"async_sqlite_create_entity_query_nosave", gsc_async_sqlite_create_entity_query_nosave, 0},
-    #endif
-
     {"setBounds", gsc_entity_setbounds, 0},
     {"showToPlayer", gsc_entity_showtoplayer, 0},
     {"setVelocity", gsc_player_setvelocity, 0},
@@ -87,18 +96,43 @@ scr_method_t scriptMethods[] =
     {"moveUpButtonPressed", gsc_player_button_up, 0},
     {"moveDownButtonPressed", gsc_player_button_down, 0},
     {"leanleftButtonPressed", gsc_player_button_leanleft, 0},
-    {"leanrightButtonPressed", gsc_player_button_leanright, 0},
+    {"leanRightButtonPressed", gsc_player_button_leanright, 0},
     {"reloadButtonPressed", gsc_player_button_reload, 0},
     {"getPlayerAngles", gsc_player_gettagangles, 0},
     {"getStance", gsc_player_getstance, 0},
-    {"getIP", gsc_player_getip, 0},
+    {"getIp", gsc_player_getip, 0},
     {"getPing", gsc_player_getping, 0},
     {"getUserinfo", gsc_player_getuserinfo, 0},
     {"setUserinfo", gsc_player_setuserinfo, 0},
     {"processClientCommand", gsc_player_processclientcommand, 0},
     {"dropClient", gsc_player_dropclient, 0},
     {"setSpeed", gsc_player_setspeed, 0},
-    {"getFPS", gsc_player_getfps, 0},
+    {"getFps", gsc_player_getfps, 0},
+    {"isOnLadder", gsc_player_isonladder, 0},
+    {"setUfo", gsc_player_setufo, 0},
+    {"connectionlessPacketToClient", gsc_player_connectionlesspackettoclient, 0},
+	{"setGravity", gsc_player_setgravity, 0},
+//	{"setStance", gsc_player_setstance, 0},
+	{"getLastConnectTime", gsc_player_getlastconnecttime, 0},
+	{"isBot", gsc_player_isbot, 0},
+
+#if COMPILE_SQLITE == 1
+    {"async_sqlite_create_entity_query", gsc_async_sqlite_create_entity_query, 0},
+    {"async_sqlite_create_entity_query_nosave", gsc_async_sqlite_create_entity_query_nosave, 0},
+#endif
+
+
+
+	{"setWalkValues", gsc_bots_setwalkvalues, 0},
+	{"setWalkDir", gsc_bots_setwalkdir, 0},
+	{"setBotStance", gsc_bots_setbotstance, 0},
+	{"fireWeapon", gsc_bots_fireweapon, 0},
+	{"meleeWeapon", gsc_bots_meleeweapon, 0},
+	{"reloadWeapon", gsc_bots_reloadweapon, 0},
+	{"setAim", gsc_bots_setaim, 0},
+	{"switchToWeaponId", gsc_bots_switchtoweaponid, 0},
+
+
 
     {"testMethod", gsc_testmethod, 0},
     {NULL, NULL, 0} // Terminator
@@ -107,24 +141,19 @@ scr_method_t scriptMethods[] =
 xmethod_t Scr_GetCustomMethod(const char **fname, qboolean *fdev)
 {
     xmethod_t m = Scr_GetMethod(fname, fdev);
-    
-    if ( m )
+    if(m)
         return m;
 
-    for ( int i = 0; scriptMethods[i].name; i++ )
+    for (int i = 0; scriptMethods[i].name; i++)
     {
-        if ( strcasecmp(*fname, scriptMethods[i].name) )
+        if(strcasecmp(*fname, scriptMethods[i].name))
             continue;
-
+        
         scr_method_t func = scriptMethods[i];
-
         *fname = func.name;
         *fdev = func.developer;
-
         return func.call;
     }
-
-
     return NULL;
 }
 
@@ -261,7 +290,7 @@ int stackGetParamInt(int param, int *value)
 
 int stackGetParamFunction(int param, int *value)
 {
-    printf("####### stackGetParamFunction \n");
+    printf("####### stackGetParamFunction\n");
     
 
     if ( param >= Scr_GetNumParam() )
@@ -407,11 +436,11 @@ uint64_t Sys_Milliseconds64(void)
 // For tests
 void gsc_testfunction()
 {
-    printf("##### gsc_testfunction \n");
+    printf("##### gsc_testfunction\n");
 }
 void gsc_testmethod(scr_entref_t ref)
 {
-    printf("##### gsc_testmethod \n");
+    printf("##### gsc_testmethod\n");
 
     int id = ref.entnum;
 
@@ -424,5 +453,11 @@ void gsc_testmethod(scr_entref_t ref)
 
     //client_t* client = &svs.clients[id];
     //gentity_t* gentity = &g_entities[id];
-    //printf("####### currentOrigin = %f, %f, %f \n", gentity->r.currentOrigin[0], gentity->r.currentOrigin[1], gentity->r.currentOrigin[2]);
+    //playerState_t *ps = SV_GameClientNum(id);
+    //gclient_t *gclient = gentity->client;
+
+
+    //printf("##### ps->gravity = %i\n", ps->gravity);
+    //printf("##### ps->viewangles[0] = %f, ps->viewangles[1] = %f, ps->viewangles[2] = %f\n", ps->viewangles[0], ps->viewangles[1], ps->viewangles[2]);
+    
 }

@@ -1,5 +1,11 @@
+#if COMPILE_LIBCURL == 1
+#include <curl/curl.h>
+#include <string>
+#endif
+
+#include <string>
+
 #include "gsc_utils.hpp"
-#include "vcodlib.hpp"
 
 void gsc_utils_sendcommandtoclient()
 {
@@ -13,7 +19,7 @@ void gsc_utils_sendcommandtoclient()
         return;
     }
 
-    SV_GameSendServerCommand(clientNum, SV_CMD_CAN_IGNORE, message);
+    trap_SendServerCommand(clientNum, SV_CMD_CAN_IGNORE, message);
     stackPushBool(qtrue);
 }
 
@@ -402,7 +408,7 @@ void gsc_utils_getconfigstring()
         return;
     }
 
-    const char *string = SV_GetConfigstringConst(index);
+    const char *string = trap_GetConfigstringConst(index);
 
     if ( !*string )
         stackPushUndefined();
@@ -429,3 +435,75 @@ void gsc_utils_makelocalizedstring()
     var = &scrVmPub.top[-param];
     var->type = STACK_LOCALIZED_STRING;
 }
+
+void gsc_utils_ban()
+{
+    int numParam = Scr_GetNumParam();
+    if (numParam)
+    {
+        std::string command = "ban";
+        command.append(" ");
+        for (int i = 0; i < numParam; i++)
+        {
+            std::string param = Scr_GetString(i);
+            command.append(param);
+        }
+        Cbuf_ExecuteText(EXEC_APPEND, custom_va(command.c_str()));
+    }
+}
+
+void gsc_utils_unban()
+{
+    int numParam = Scr_GetNumParam();
+    if (numParam)
+    {
+        std::string command = "unban";
+        command.append(" ");
+        for (int i = 0; i < numParam; i++)
+        {
+            std::string param = Scr_GetString(i);
+            command.append(param);
+        }
+        Cbuf_ExecuteText(EXEC_APPEND, custom_va(command.c_str()));
+    }
+}
+
+#if COMPILE_LIBCURL == 1
+void gsc_utils_webhookmessage() // TODO: See if needs threading
+{
+    char *url;
+    char *message;
+    if(!stackGetParams("ss", &url, &message))
+    {
+        stackError("gsc_utils_webhookmessage() one or more arguments are undefined or have a wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    CURL *curl;
+    CURLcode responseCode;
+    struct curl_slist *headers = NULL;
+    std::string payload = "{\"content\":\"" + std::string(message) + "\"}";
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    if(curl)
+    {
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+
+        responseCode = curl_easy_perform(curl);
+        if(responseCode != CURLE_OK)
+            Com_Printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(responseCode));
+
+        curl_easy_cleanup(curl);
+        curl_slist_free_all(headers);
+    }
+    else
+        Com_Printf("curl_easy_init() failed\n");
+    
+    curl_global_cleanup();
+}
+#endif

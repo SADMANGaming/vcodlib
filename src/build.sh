@@ -1,35 +1,23 @@
 #!/bin/bash
 
-# E.g.: ./build.sh -1 -d --sqlite
+# E.g.: ./build.sh -d --sqlite
 
 cc="g++"
 options="-I. -m32 -fPIC -Wall -fvisibility=hidden"
-# -Wno-write-strings // not full warnings
 
 separator="---------------------"
 
 while [[ $# -gt 0 ]]; do
     arg="$1"
     case $arg in
-        -1 | --1.1)
-            if [ -v patch ]; then
-                multiple_patch_attempt=true
-                break
-            fi
-            patch=1.1
-            ;;
-        -5 | --1.5)
-            if [ -v patch ]; then
-                multiple_patch_attempt=true
-                break
-            fi
-            patch=1.5
-            ;;
         -d | --debug)
             debug="-g -ggdb -O0" # debug build without optimization
             ;;
         -s | --sqlite)
             sqlite=true
+            ;;
+        -l | --libcurl)
+            libcurl=true
             ;;
         -u | --unsafe)
             unsafe=true
@@ -47,24 +35,7 @@ if [ -v unrecognized_arg ]; then
     exit 1
 fi
 
-if [ ! -v patch ]; then
-    echo "Patch version not specified, aborting."
-    exit 1
-elif [ -v multiple_patch_attempt ]; then
-    echo "Only one patch version must be specified, aborting."
-    exit 1
-fi
-
 echo $separator
-
-echo "Patch:  $patch"
-if [ $patch == 1.1 ]; then
-    set -- "vcodlib1_1_1"
-    constants+="-D COD_VERSION=COD1_1_1"
-elif [ $patch == 1.5 ]; then
-    set -- "vcodlib1_1_5"
-    constants+="-D COD_VERSION=COD1_1_5"
-fi
 
 echo -n "Debug: "
 if [ -v debug ]; then
@@ -104,50 +75,69 @@ else
     constants+=" -D COMPILE_SQLITE=0"
 fi
 
+libcurl_found=0
+libcurl_link=""
+libcurl_libpath="/usr/lib/i386-linux-gnu/libcurl.so.4"
+echo -n "libcurl: "
+if [ -v libcurl ]; then
+    if [ -e "$libcurl_libpath" ]; then
+        libcurl_found=1
+        libcurl_link="-lcurl"
+        constants+=" -D COMPILE_LIBCURL=1"
+        echo "ON"
+    else
+        echo "requested but lib not found, aborting."
+        exit 1
+    fi
+else
+    echo "OFF"
+    constants+=" -D COMPILE_LIBCURL=0"
+fi
+
 echo $separator
 
 mkdir -p ../bin
-mkdir -p objects_$1
+mkdir -p objects
 
-echo "##### COMPILE $1 CRACKING.CPP #####"
-$cc $debug $options $constants -c cracking.cpp -o objects_$1/cracking.opp
+echo "##### COMPILE CRACKING.CPP #####"
+$cc $debug $options $constants -c cracking.cpp -o objects/cracking.opp
 
-echo "##### COMPILE $1 GSC.CPP #####"
-$cc $debug $options $constants -c gsc.cpp -o objects_$1/gsc.opp
+echo "##### COMPILE GSC.CPP #####"
+$cc $debug $options $constants -c gsc.cpp -o objects/gsc.opp
 
-echo "##### COMPILE $1 GSC_ENTITY.CPP #####"
-$cc $debug $options $constants -c gsc_entity.cpp -o objects_$1/gsc_entity.opp
+echo "##### COMPILE GSC_ENTITY.CPP #####"
+$cc $debug $options $constants -c gsc_entity.cpp -o objects/gsc_entity.opp
+
+echo "##### COMPILE GSC_EXEC.CPP #####"
+$cc $debug $options $constants -c gsc_exec.cpp -o objects/gsc_exec.opp
 
 if [ $sqlite_found == 1 ]; then
-    echo "##### COMPILE $1 GSC_SQLITE.CPP #####"
-    $cc $debug $options $constants -c gsc_sqlite.cpp -o objects_"$1"/gsc_sqlite.opp
+    echo "##### COMPILE GSC_SQLITE.CPP #####"
+    $cc $debug $options $constants -c gsc_sqlite.cpp -o objects/gsc_sqlite.opp
 fi
 
-echo "##### COMPILE $1 GSC_PLAYER.CPP #####"
-$cc $debug $options $constants -c gsc_player.cpp -o objects_$1/gsc_player.opp
+echo "##### COMPILE GSC_PLAYER.CPP #####"
+$cc $debug $options $constants -c gsc_player.cpp -o objects/gsc_player.opp
 
-echo "##### COMPILE $1 GSC_UTILS.CPP #####"
-$cc $debug $options $constants -c gsc_utils.cpp -o objects_$1/gsc_utils.opp
+echo "##### COMPILE GSC_UTILS.CPP #####"
+$cc $debug $options $constants -c gsc_utils.cpp -o objects/gsc_utils.opp
 
-echo "##### COMPILE $1 GSC_WEAPONS.CPP #####"
-$cc $debug $options $constants -c gsc_weapons.cpp -o objects_$1/gsc_weapons.opp
+echo "##### COMPILE GSC_WEAPONS.CPP #####"
+$cc $debug $options $constants -c gsc_weapons.cpp -o objects/gsc_weapons.opp
 
-if [ $patch == 1.5 ]; then
-    echo "##### COMPILE $1 JUMP.CPP #####"
-    $cc $debug $options $constants -c jump.cpp -o objects_"$1"/jump.opp
-fi
+echo "##### COMPILE GSC_BOTS.CPP #####"
+$cc $debug $options $constants -c gsc_bots.cpp -o objects/gsc_bots.opp
 
-echo "##### COMPILE $1 VCODLIB.CPP #####"
-$cc $debug $options $constants -c vcodlib.cpp -o objects_$1/vcodlib.opp
+# echo "##### COMPILE JUMP.CPP #####"
+# $cc $debug $options $constants -c jump.cpp -o objects/jump.opp
 
-echo "##### COMPILE $1 QVSNPRINTF.C #####"
-$cc $debug $options $constants -c lib/qvsnprintf.c -o objects_"$1"/qvsnprintf.opp
+echo "##### COMPILE VCODLIB.CPP #####"
+$cc $debug $options $constants -c vcodlib.cpp -o objects/vcodlib.opp
 
-echo "##### COMPILE $1 STRCMP_CONSTANT_TIME.C #####"
-$cc $debug $options $constants -c lib/strcmp_constant_time.c -o objects_"$1"/strcmp_constant_time.opp
+echo "##### COMPILE QVSNPRINTF.C #####"
+$cc $debug $options $constants -c vendor/qvsnprintf.c -o objects/qvsnprintf.opp
 
-
-echo "##### LINK    $1.so #####"
-objects="$(ls objects_$1/*.opp)"
-$cc -m32 -shared -L/lib32 -o ../bin/$1.so -ldl $objects -lpthread $sqlite_link
-rm objects_$1 -r
+echo "##### LINK    vcodlib.so #####"
+objects="$(ls objects/*.opp)"
+$cc -m32 -shared -L/lib32 -o ../bin/vcodlib.so -ldl $objects -lpthread $sqlite_link $libcurl_link
+rm objects -r

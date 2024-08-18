@@ -372,45 +372,224 @@ void gsc_player_dropclient(scr_entref_t ref)
 
 void gsc_player_setspeed(scr_entref_t ref)
 {
-	int id = ref.entnum;
-	int speed;
+    int id = ref.entnum;
+    int speed;
 
-	if ( !stackGetParams("i", &speed) )
-	{
-		stackError("gsc_player_setspeed() argument is undefined or has a wrong type");
-		stackPushUndefined();
-		return;
-	}
+    if ( !stackGetParams("i", &speed) )
+    {
+        stackError("gsc_player_setspeed() argument is undefined or has a wrong type");
+        stackPushUndefined();
+        return;
+    }
 
-	if ( id >= MAX_CLIENTS )
-	{
-		stackError("gsc_player_setspeed() entity %i is not a player", id);
-		stackPushUndefined();
-		return;
-	}
+    if ( id >= MAX_CLIENTS )
+    {
+        stackError("gsc_player_setspeed() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
 
-	if ( speed < 0 )
-	{
-		stackError("gsc_player_setspeed() param must be equal or above zero");
-		stackPushUndefined();
-		return;
-	}
+    if ( speed < 0 )
+    {
+        stackError("gsc_player_setspeed() param must be equal or above zero");
+        stackPushUndefined();
+        return;
+    }
 
-	customPlayerState[id].speed = speed;
+    customPlayerState[id].speed = speed;
 
-	stackPushBool(qtrue);
+    stackPushBool(qtrue);
 }
 
 void gsc_player_getfps(scr_entref_t ref)
+{
+    int id = ref.entnum;
+
+    if ( id >= MAX_CLIENTS )
+    {
+        stackError("gsc_player_getfps() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+
+    stackPushInt(customPlayerState[id].fps);
+}
+
+void gsc_player_isonladder(scr_entref_t ref)
+{
+    int id = ref.entnum;
+
+    if ( id >= MAX_CLIENTS )
+    {
+        stackError("gsc_player_isonladder() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+
+    playerState_t *ps = SV_GameClientNum(id);
+
+    stackPushBool(ps->pm_flags & PMF_LADDER ? qtrue : qfalse);
+}
+
+void gsc_player_setufo(scr_entref_t ref)
+{
+    int id = ref.entnum;
+    int state;
+
+    if ( !stackGetParams("i", &state) )
+    {
+        stackError("gsc_player_setufo() argument is undefined or has a wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    if ( id >= MAX_CLIENTS )
+    {
+        stackError("gsc_player_setufo() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+
+    if (state != 0 && state != 1)
+    {
+        stackError("gsc_player_setufo() param must be 0 or 1");
+        stackPushUndefined();
+        return;
+    }
+
+    customPlayerState[id].ufo = state;
+
+    stackPushBool(qtrue);
+}
+
+void gsc_player_connectionlesspackettoclient(scr_entref_t ref)
+{
+    int id = ref.entnum;
+    char *cmd;
+
+    if ( !stackGetParams("s", &cmd) )
+    {
+        stackError("gsc_player_connectionlesspackettoclient() argument is undefined or has a wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    if ( id >= MAX_CLIENTS )
+    {
+        stackError("gsc_player_connectionlesspackettoclient() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+
+    client_t *client = &svs.clients[id];
+    NET_OutOfBandPrint(NS_SERVER, client->netchan.remoteAddress, cmd);
+
+    stackPushBool(qtrue);
+}
+
+void gsc_player_isbot(scr_entref_t ref)
+{
+    int id = ref.entnum;
+
+    if ( id >= MAX_CLIENTS )
+    {
+        stackError("gsc_player_isbot() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+
+    client_t *client = &svs.clients[id];
+    stackPushBool(client->bIsTestClient); // Use the bot field instead of bIsTestClient
+
+    return;
+}
+/*
+void gsc_player_setstance(scr_entref_t ref)
+{
+	int id = ref.entnum;
+	char *stance;
+
+	if ( !stackGetParams("s", &stance) )
+	{
+		stackError("gsc_player_setstance() argument is undefined or has a wrong type");
+		stackPushUndefined();
+		return;
+	}
+
+	gentity_t *entity = &g_entities[id];
+
+	if ( entity->client == NULL )
+	{
+		stackError("gsc_player_setstance() entity %i is not a player", id);
+		stackPushUndefined();
+		return;
+	}
+
+	int event;
+
+
+	if ( strcmp(stance, "crouch") == 0 )
+		event = EF_CROUCHING;
+	else if ( strcmp(stance, "prone") == 0 )
+		event = EF_PRONE;
+    else if ( strcmp(stance, "stand") == 0)
+        event = EF_STAND;
+	else
+	{
+		stackError("gsc_player_setstance() invalid argument '%s'. Valid arguments are: 'stand', 'crouch', 'prone'", stance);
+		stackPushUndefined();
+		return;
+	}
+
+	G_AddPredictableEvent(entity, event, 0);
+
+	stackPushBool(qtrue);
+}
+*/
+void gsc_player_getlastconnecttime(scr_entref_t ref)
 {
 	int id = ref.entnum;
 
 	if ( id >= MAX_CLIENTS )
 	{
-		stackError("gsc_player_getfps() entity %i is not a player", id);
+		stackError("gsc_player_getlastconnecttime() entity %i is not a player", id);
 		stackPushUndefined();
 		return;
 	}
 
-	stackPushInt(customPlayerState[id].fps);
+	client_t *client = &svs.clients[id];
+
+	stackPushInt(client->lastConnectTime);
 }
+
+void gsc_player_setgravity(scr_entref_t ref)
+{
+	int id = ref.entnum;
+    int gravity;
+
+	if ( !stackGetParams("i", &gravity) )
+	{
+		stackError("gsc_player_setgravity() argument is undefined or has a wrong type");
+		stackPushUndefined();
+		return;
+	}
+
+	if ( id >= MAX_CLIENTS )
+	{
+		stackError("gsc_player_setgravity() entity %i is not a player", id);
+		stackPushUndefined();
+		return;
+	}
+
+	if ( gravity < 0 )
+	{
+		stackError("gsc_player_setgravity() param must be equal or above zero");
+		stackPushUndefined();
+		return;
+	}
+
+	customPlayerState[id].gravity = gravity;
+
+	stackPushBool(qtrue);
+}
+
