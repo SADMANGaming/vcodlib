@@ -1,6 +1,6 @@
-# Server extension for [CoD1](https://en.wikipedia.org/wiki/Call_of_Duty_(video_game))
-### Adding security, fixes, and features
-Supported game version: **1.1**
+# VCODLIB 1.1
+### Adding more feautures, gsc functions to Call of Duty 1.1
+Supported Call of Duty version: **1.1**
 ___
 
 #### Credits
