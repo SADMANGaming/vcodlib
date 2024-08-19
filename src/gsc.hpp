@@ -28,7 +28,6 @@
 #include "gsc_player.hpp"
 #include "gsc_utils.hpp"
 #include "gsc_weapons.hpp"
-#include "jump.hpp"
 #include "gsc_bots.hpp"
 
 #if COMPILE_SQLITE == 1
