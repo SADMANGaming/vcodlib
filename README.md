@@ -6,4 +6,5 @@ ___
 #### Credits
 - [libcod1](https://github.com/cod1dev/libcod1/)
 - [zk_libcod](https://github.com/ibuddieat/zk_libcod/)
+- [CoDExtended](https://github.com/xtnded/codextended/)
 - [ChatGPT](https://chat.openai.com/)
