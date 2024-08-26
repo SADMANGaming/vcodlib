@@ -12,3 +12,13 @@ Websites:
 - [zk_libcod](https://github.com/ibuddieat/zk_libcod/)
 - [CoDExtended](https://github.com/xtnded/codextended/)
 - [ChatGPT](https://chat.openai.com/)
+- [Killtube Discord](https://discord.gg/7hK9da3SB5)
+
+Peoples:
+
+
+- Raphael
+- Kung foo man
+- iBuddie
+- php
+- Kazam
