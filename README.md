@@ -23,4 +23,3 @@ Peoples:
 - Kung foo man
 - iBuddie
 - php
-- Kazam
