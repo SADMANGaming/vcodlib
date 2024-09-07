@@ -14,10 +14,6 @@
 #include "gsc.hpp"
 
 
-//Credits
-//void (*SV_AddServerCommand)(client_t *, int, const char*) = (void(*)(client_t*,int,const char*))0x808B680;
-	
-//SV_SendServerCommand(cl, 0, "e \"This server is powered by VCoDLib.%s\"", cl->name);
 
 // Stock cvars
 cvar_t *com_cl_running;
@@ -45,6 +41,7 @@ cvar_t *g_playerEject;
 cvar_t *g_resetSlide;
 cvar_t *sv_cracked;
 cvar_t *jump_height;
+//cvar_t *g_jumpslowdown;
 
 cHook *hook_clientendframe;
 cHook *hook_com_init;
@@ -82,12 +79,12 @@ callback_t callbacks[] =
 };
 
 customPlayerState_t customPlayerState[MAX_CLIENTS];
-
 // Game lib objects
 gentity_t* g_entities;
 gclient_t* g_clients;
 level_locals_t* level;
 pmove_t* pm;
+
 stringIndex_t* scr_const;
 
 // Game lib functions
@@ -139,6 +136,12 @@ Com_SkipRestOfLine_t Com_SkipRestOfLine;
 Com_ParseRestOfLine_t Com_ParseRestOfLine;
 Com_ParseInt_t Com_ParseInt;
 
+// Resume addresses -----
+uintptr_t resume_addr_Jump_Check;
+uintptr_t resume_addr_Jump_Check_2;
+
+
+
 void custom_Com_Init(char *commandLine)
 {
     hook_com_init->unhook();
@@ -176,12 +179,15 @@ void custom_Com_Init(char *commandLine)
     g_playerEject = Cvar_Get("g_playerEject", "1", CVAR_ARCHIVE);
     g_resetSlide = Cvar_Get("g_resetSlide", "0", CVAR_ARCHIVE);
     sv_cracked = Cvar_Get("sv_cracked", "0", CVAR_ARCHIVE);
+    jump_height = Cvar_Get("jump_height", "39.0", CVAR_ARCHIVE);
+//    g_jumpslowdown = Cvar_Get("g_jumpslowdown", "0", CVAR_ARCHIVE);
 
     /*
     Force cl_allowDownload on client, otherwise 1.1x can't download to join the server
     TODO: Force only for 1.1x clients
     */
     Cvar_Get("cl_allowDownload", "1", CVAR_SYSTEMINFO);
+
 }
 
 void hook_G_Say(gentity_s *ent, gentity_s *target, int mode, const char *chatText)
@@ -463,6 +469,13 @@ void sendMessageTo_inGameAdmin_orServerConsole(client_t *cl, std::string message
         Com_Printf(finalMessage.c_str());
     }
 }
+
+void rizzup(client_t *cl)
+{
+    SV_SendServerCommand(cl, 0, "e \"This server is powered by CoDExtended.\"");
+}
+
+
 const std::array<std::string, 5> banParameters = {"-i", "-n", "-r", "-d", "-a"};
 const std::array<std::string, 2> unbanParameters = {"-i", "-a"};
 /*
@@ -1104,6 +1117,7 @@ void custom_SV_ClientThink(int clientNum)
     ClientThink(clientNum);
     hook_play_movement->hook();
 
+
     customPlayerState[clientNum].frames++;
 
     if (Sys_Milliseconds64() - customPlayerState[clientNum].frameTime >= 1000)
@@ -1456,6 +1470,44 @@ void hook_SV_DirectConnect(netadr_t from)
     SV_DirectConnect(from);
 }
 
+//BOTS ----- ZK_LIBCOD
+/*
+void custom_SV_BotUserMove(client_t *client)
+{
+	int num;
+	usercmd_t ucmd = {0};
+
+	if ( client->gentity == NULL )
+		return;
+
+	num = client - svs.clients;
+	ucmd.serverTime = svs.time;
+
+	playerState_t *ps = SV_GameClientNum(num);
+	gentity_t *ent = SV_GentityNum(num);
+
+	if ( customPlayerState[num].botWeapon )
+		ucmd.weapon = (byte)(customPlayerState[num].botWeapon & 0xFF);
+	else
+		ucmd.weapon = (byte)(ps->weapon & 0xFF);
+
+	if ( ent->client == NULL )
+		return;
+
+	if ( ent->client->sess.archiveTime == 0 )
+	{
+		ucmd.buttons = customPlayerState[num].botButtons;
+		ucmd.forwardmove = customPlayerState[num].botForwardMove;
+		ucmd.rightmove = customPlayerState[num].botRightMove;
+
+		VectorCopy(ent->client->sess.cmd.angles, ucmd.angles);
+	}
+
+	client->deltaMessage = client->netchan.outgoingSequence - 1;
+	SV_ClientThink(client, &ucmd);
+}
+*/
+
 void hook_SV_AuthorizeIpPacket(netadr_t from)
 {
     // Prevent ipAuthorize log spam DoS
@@ -1504,6 +1556,7 @@ void hook_SVC_Status(netadr_t from)
         return;
     SVC_Status(from);
 }
+
 
 // See https://nachtimwald.com/2017/04/02/constant-time-string-comparison-in-c/
 bool str_iseq(const char *s1, const char *s2)
@@ -1568,6 +1621,7 @@ void ServerCrash(int sig)
     exit(1);
 }
 
+
 void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int, ...), int (*systemcalls)(int, ...))
 {
     hook_sys_loaddll->unhook();
@@ -1605,6 +1659,7 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     level = (level_locals_t*)dlsym(ret, "level");
     pm = (pmove_t*)dlsym(ret, "pm");
     scr_const = (stringIndex_t*)dlsym(ret, "scr_const");
+
 
     Scr_GetFunctionHandle = (Scr_GetFunctionHandle_t)dlsym(ret, "Scr_GetFunctionHandle");
     Scr_GetNumParam = (Scr_GetNumParam_t)dlsym(ret, "Scr_GetNumParam");
@@ -1654,10 +1709,22 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     Q_strncpyz = (Q_strncpyz_t)dlsym(ret, "Q_strncpyz");
     Q_CleanStr = (Q_CleanStr_t)dlsym(ret, "Q_CleanStr");
 
+
+
     hook_call((int)dlsym(ret, "vmMain") + 0xB0, (int)hook_ClientCommand);
     hook_call((int)dlsym(ret, "ClientEndFrame") + 0x311, (int)hook_StuckInClient);
 
+
+
     hook_jmp((int)dlsym(ret, "G_LocalizedStringIndex"), (int)custom_G_LocalizedStringIndex);
+
+    //1.1 Jump_Height Cvar -- Raphael
+    hook_jmp((int)dlsym(ret, "BG_PlayerTouchesItem") + 0x88C, (int)hook_Jump_Check_Naked);
+    resume_addr_Jump_Check = (uintptr_t)dlsym(ret, "BG_PlayerTouchesItem") + 0x892;
+    hook_jmp((int)dlsym(ret, "BG_PlayerTouchesItem") + 0x89E, (int)hook_Jump_Check_Naked_2);
+    resume_addr_Jump_Check_2 = (uintptr_t)dlsym(ret, "BG_PlayerTouchesItem") + 0x8A4;
+
+
 
     // Patch codmsgboom
     /* See:
@@ -1724,6 +1791,7 @@ public:
         hook_jmp(0x080717a4, (int)custom_FS_ReferencedPakChecksums);
         hook_jmp(0x080716cc, (int)custom_FS_ReferencedPakNames);
         hook_jmp(0x080872ec, (int)custom_SV_ExecuteClientMessage);
+
 
         // Patch q3infoboom
         /* See:

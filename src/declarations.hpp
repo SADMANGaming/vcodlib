@@ -70,10 +70,12 @@
 // entityState_t->eFlags
 #define EF_CROUCHING    0x20
 #define EF_PRONE        0x40
-#define EF_STAND        0x60
+//#define EF_STAND        0x60
 
 #define PMF_LADDER          0x10
 #define PMF_SLIDING         0x100
+
+#define PMF_JUMPING         0x80000
 
 typedef void (*xcommand_t)(void);
 
@@ -649,6 +651,9 @@ typedef struct
     serverState_t state;
     qboolean restarting;
     int start_frameTime;
+    byte pad[0x6141C];
+    playerState_t *gameClients;
+    int gameClientSize;
     // ...
 } server_t;
 
@@ -718,6 +723,7 @@ typedef struct
     // ...
 } stringIndex_t;
 
+
 extern gentity_t *g_entities;
 extern gclient_t *g_clients;
 extern stringIndex_t *scr_const;
@@ -770,6 +776,8 @@ typedef struct customPlayerState_s
     int frames;
     uint64_t frameTime;
     int ufo;
+    qboolean overrideJumpHeight;
+    int jumpHeight;
 	int botButtons;
 	int botWeapon;
 	char botForwardMove;

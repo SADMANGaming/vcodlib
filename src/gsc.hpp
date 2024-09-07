@@ -23,12 +23,14 @@
 #include "cracking.hpp"
 #include "functions.hpp"
 
+#include "jump.hpp"
+
 #include "gsc_entity.hpp"
 #include "gsc_exec.hpp"
 #include "gsc_player.hpp"
 #include "gsc_utils.hpp"
 #include "gsc_weapons.hpp"
-#include "gsc_bots.hpp"
+//#include "gsc_bots.hpp"
 
 #if COMPILE_SQLITE == 1
 #include "gsc_sqlite.hpp"

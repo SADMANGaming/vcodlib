@@ -26,6 +26,7 @@ scr_function_t scriptFunctions[] =
     {"getAscii", gsc_utils_getascii, 0},
     {"toUpper", gsc_utils_toupper, 0},
     {"toLower", gsc_utils_tolower, 0},
+    {"toRGB", gsc_utils_torgb, 0},
     {"strtok", gsc_utils_strtok, 0},
     {"replace", gsc_utils_replace, 0},
     {"getSystemTime", gsc_utils_getsystemtime, 0},
@@ -107,12 +108,12 @@ scr_method_t scriptMethods[] =
     {"processClientCommand", gsc_player_processclientcommand, 0},
     {"dropClient", gsc_player_dropclient, 0},
     {"setSpeed", gsc_player_setspeed, 0},
+    {"setJumpHeight", gsc_player_setjumpheight, 0},
     {"getFps", gsc_player_getfps, 0},
     {"isOnLadder", gsc_player_isonladder, 0},
     {"setUfo", gsc_player_setufo, 0},
     {"connectionlessPacketToClient", gsc_player_connectionlesspackettoclient, 0},
 	{"setGravity", gsc_player_setgravity, 0},
-//	{"setStance", gsc_player_setstance, 0},
 	{"getLastConnectTime", gsc_player_getlastconnecttime, 0},
 	{"isBot", gsc_player_isbot, 0},
 
@@ -122,7 +123,7 @@ scr_method_t scriptMethods[] =
 #endif
 
 
-
+/*
 	{"setWalkValues", gsc_bots_setwalkvalues, 0},
 	{"setWalkDir", gsc_bots_setwalkdir, 0},
 	{"setBotStance", gsc_bots_setbotstance, 0},
@@ -131,7 +132,7 @@ scr_method_t scriptMethods[] =
 	{"reloadWeapon", gsc_bots_reloadweapon, 0},
 	{"setAim", gsc_bots_setaim, 0},
 	{"switchToWeaponId", gsc_bots_switchtoweaponid, 0},
-
+*/
 
 
     {"testMethod", gsc_testmethod, 0},

@@ -52,7 +52,7 @@ void gsc_bots_setwalkdir(scr_entref_t ref)
 
 	if ( strcmp(dir, "none") == 0 )
 	{
-		customPlayerState[id].botForwardMove = KEY_MASK_MOVEUP;
+		customPlayerState[id].botForwardMove = KEY_MASK_NONE;
 		customPlayerState[id].botRightMove = KEY_MASK_NONE;
 	}
 	else if ( strcmp(dir, "forward") == 0 )

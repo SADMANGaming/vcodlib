@@ -503,49 +503,6 @@ void gsc_player_isbot(scr_entref_t ref)
 
     return;
 }
-/*
-void gsc_player_setstance(scr_entref_t ref)
-{
-	int id = ref.entnum;
-	char *stance;
-
-	if ( !stackGetParams("s", &stance) )
-	{
-		stackError("gsc_player_setstance() argument is undefined or has a wrong type");
-		stackPushUndefined();
-		return;
-	}
-
-	gentity_t *entity = &g_entities[id];
-
-	if ( entity->client == NULL )
-	{
-		stackError("gsc_player_setstance() entity %i is not a player", id);
-		stackPushUndefined();
-		return;
-	}
-
-	int event;
-
-
-	if ( strcmp(stance, "crouch") == 0 )
-		event = EF_CROUCHING;
-	else if ( strcmp(stance, "prone") == 0 )
-		event = EF_PRONE;
-    else if ( strcmp(stance, "stand") == 0)
-        event = EF_STAND;
-	else
-	{
-		stackError("gsc_player_setstance() invalid argument '%s'. Valid arguments are: 'stand', 'crouch', 'prone'", stance);
-		stackPushUndefined();
-		return;
-	}
-
-	G_AddPredictableEvent(entity, event, 0);
-
-	stackPushBool(qtrue);
-}
-*/
 void gsc_player_getlastconnecttime(scr_entref_t ref)
 {
 	int id = ref.entnum;
@@ -592,4 +549,32 @@ void gsc_player_setgravity(scr_entref_t ref)
 
 	stackPushBool(qtrue);
 }
+void gsc_player_setjumpheight(scr_entref_t ref)
+{
+    int id = ref.entnum;
+    float jump_height;
 
+    if ( !stackGetParams("f", &jump_height) )
+    {
+        stackError("gsc_player_setjumpheight() argument is undefined or has a wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    if ( id >= MAX_CLIENTS )
+    {
+        stackError("gsc_player_setjumpheight() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+
+    if ( jump_height < 0 )
+        customPlayerState[id].overrideJumpHeight = false;
+    else
+    {
+        customPlayerState[id].overrideJumpHeight = true;
+        customPlayerState[id].jumpHeight = jump_height;
+    }
+
+    stackPushBool(qtrue);
+}
