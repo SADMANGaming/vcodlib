@@ -41,6 +41,8 @@ cvar_t *g_playerEject;
 cvar_t *g_resetSlide;
 cvar_t *sv_cracked;
 cvar_t *jump_height;
+cvar_t *bot_reconnectMode;
+cvar_t *sv_allowRcon;
 //cvar_t *g_jumpslowdown;
 
 cHook *hook_clientendframe;
@@ -180,6 +182,8 @@ void custom_Com_Init(char *commandLine)
     g_resetSlide = Cvar_Get("g_resetSlide", "0", CVAR_ARCHIVE);
     sv_cracked = Cvar_Get("sv_cracked", "0", CVAR_ARCHIVE);
     jump_height = Cvar_Get("jump_height", "39.0", CVAR_ARCHIVE);
+    bot_reconnectMode = Cvar_Get("bot_reconnectMode", "0", CVAR_ARCHIVE);
+    sv_allowRcon = Cvar_Get("sv_allowRcon", "0", CVAR_ARCHIVE);
 //    g_jumpslowdown = Cvar_Get("g_jumpslowdown", "0", CVAR_ARCHIVE);
 
     /*
@@ -411,6 +415,29 @@ void custom_SV_SpawnServer(char *server)
     *(int *)&SV_SpawnServer = hook_sv_spawnserver->from;
     SV_SpawnServer(server);
     hook_sv_spawnserver->hook();
+
+	client_t *cl;
+    int i;
+
+	for ( i = 0, cl = svs.clients; i < sv_maxclients->integer; ++i, ++cl )
+	{
+		if ( cl->state < CS_CONNECTED )
+		{
+			continue;
+		}
+
+		/* New: sv_botReconnectMode cvar */
+		if ( cl->bIsTestClient )
+		{
+			if ( bot_reconnectMode->integer == 1 )
+			{
+				SV_DropClient(cl, "EXE_DISCONNECTED");
+				continue;
+			}
+        }
+    }
+
+// End lol
 
 #if COMPILE_SQLITE == 1
     free_sqlite_db_stores_and_tasks();
@@ -1129,6 +1156,47 @@ void custom_SV_ClientThink(int clientNum)
         customPlayerState[clientNum].frameTime = Sys_Milliseconds64();
         customPlayerState[clientNum].frames = 0;
     }
+
+    	if ( Sys_Milliseconds64() - customPlayerState[clientNum].frameTime >= 1000 )
+	{
+		if ( customPlayerState[clientNum].frames > 1000 )
+			customPlayerState[clientNum].frames = 1000;
+
+		customPlayerState[clientNum].fps = customPlayerState[clientNum].frames;
+		customPlayerState[clientNum].frameTime = Sys_Milliseconds64();
+		customPlayerState[clientNum].frames = 0;
+	}
+/*
+	if ( ucmd->buttons & KEY_MASK_FIRE && !(customPlayerState[clientnum].previousButtons & KEY_MASK_FIRE) )
+	{
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_MELEE && !(customPlayerState[clientnum].previousButtons & KEY_MASK_MELEE) )
+	{
+	}
+
+	if ( ucmd->buttons & KEY_MASK_RELOAD && !(customPlayerState[clientnum].previousButtons & KEY_MASK_RELOAD) )
+	{
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_PRONE && !(customPlayerState[clientnum].previousButtons & KEY_MASK_PRONE) )
+	{
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_CROUCH && !(customPlayerState[clientnum].previousButtons & KEY_MASK_CROUCH) )
+	{
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_JUMP && !(customPlayerState[clientnum].previousButtons & KEY_MASK_JUMP) )
+	{
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_ADS_MODE && !(customPlayerState[clientnum].previousButtons & KEY_MASK_ADS_MODE) )
+	{
+	}
+
+	customPlayerState[clientnum].previousButtons = ucmd->buttons;
+*/
 }
 
 int custom_ClientEndFrame(gentity_t *ent)
@@ -1587,6 +1655,10 @@ bool str_iseq(const char *s1, const char *s2)
 void hook_SVC_RemoteCommand(netadr_t from, msg_t *msg)
 {
     char* password = Cmd_Argv(1);
+
+    if (sv_allowRcon->integer == 0)
+	return;
+
     qboolean badRconPassword = !strlen(sv_rconPassword->string) || !str_iseq(password, sv_rconPassword->string);
     
     if (SVC_ApplyRconLimit(from, badRconPassword))
