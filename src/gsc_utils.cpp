@@ -468,6 +468,47 @@ void gsc_utils_unban()
     }
 }
 
+void gsc_utils_torgb()
+{
+    char *str;
+
+    if ( !stackGetParams("s", &str) )
+    {
+        stackError("gsc_utils_torgb() argument is undefined or has a wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    if ( !strlen(str) )
+    {
+        stackError("gsc_utils_torgb() string length is 0");
+        stackPushUndefined();
+        return;
+    }
+
+    unsigned int r = 0, g = 0, b = 0;
+    
+    for (int i = 0; str[i] != '\0'; ++i)
+    {
+        r += str[i];
+        g += str[i] * 2;
+        b += str[i] * 3;
+    }
+
+    r = r % 256;
+    g = g % 256;
+    b = b % 256;
+
+
+    stackPushArray();
+    stackPushInt(r);
+    stackPushArrayLast();
+    stackPushInt(g);
+    stackPushArrayLast();
+    stackPushInt(b);
+    stackPushArrayLast();
+}
+
 
 #if COMPILE_LIBCURL == 1
 void gsc_utils_webhookmessage() // TODO: See if needs threading

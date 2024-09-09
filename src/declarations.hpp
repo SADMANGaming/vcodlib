@@ -75,7 +75,6 @@
 #define PMF_LADDER          0x10
 #define PMF_SLIDING         0x100
 
-#define PMF_JUMPING         0x80000
 
 typedef void (*xcommand_t)(void);
 

@@ -1,29 +1,27 @@
 /*
 Inline asm notes
 
-__attribute__ ((naked)): no prologue/epilogue
-extern "C": disable name mangling
+- __attribute__ ((naked)): no prologue/epilogue
+- extern "C": no name mangling
+- asm volatile: no optimizaion/reordering
 
-pushal: save registers
-popal: restore registers
+- pushal: save general-purpose registers
+- popal: restore general-purpose registers
 
 asm volatile (
-    // instructions
-    : // output
-    : // input (m = memory, r = register)
-    : // clobbered list
+    // Instructions
+    : // Output operands
+    : // Input operands (m = memory, r = register)
+    : // Clobber list
 );
 */
 
 #include "jump.hpp"
 
-// Custom cvars
 extern cvar_t *jump_height;
 
-// Game lib objects
 extern pmove_t *pm;
 
-// Resume addresses
 extern uintptr_t resume_addr_Jump_Check;
 extern uintptr_t resume_addr_Jump_Check_2;
 
@@ -44,17 +42,17 @@ float getJumpHeight()
     return jump_height->value;
 }
 
-// This applies the height
+// Update ps->velocity[2]
 __attribute__ ((naked)) void hook_Jump_Check_Naked()
 {
     asm volatile (
-        "pushal\n"
+        "push %%eax\n"
         "call setJumpHeight\n"
-        "popal\n"
+        "pop %%eax\n"
         "jmp *%0\n"
         :
         : "r"(resume_addr_Jump_Check)
-        : "%eax"
+        :
     );
 }
 extern "C" void setJumpHeight()
@@ -68,13 +66,23 @@ extern "C" void setJumpHeight()
     );
 }
 
-// This updates ps->jumpTime
+// Update ps->jumpTime
+/*
+Had to:
+- start at the mov instruction
+- add eax to the clobber list
+not to prevent landing faster when jumping on objects instead of continuing to ascend.
+*/
 __attribute__ ((naked)) void hook_Jump_Check_Naked_2()
 {
     asm volatile (
+        "mov (%%ebx), %%eax\n"
+        "fld 0x1C(%%eax)\n"
+
         "pushal\n"
         "call setJumpHeight_2\n"
         "popal\n"
+
         "jmp *%0\n"
         :
         : "r"(resume_addr_Jump_Check_2)

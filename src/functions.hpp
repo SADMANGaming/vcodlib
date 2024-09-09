@@ -391,4 +391,6 @@ static const Cbuf_ExecuteText_t Cbuf_ExecuteText = (Cbuf_ExecuteText_t)0x0805a8a
 typedef void (*Huff_Decompress_t)(msg_t *mbuf, int offset);
 static const Huff_Decompress_t Huff_Decompress = (Huff_Decompress_t)0x08071f7c;
 
+typedef int (*Jump_Check_t)();
+
 #endif
