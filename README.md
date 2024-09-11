@@ -20,6 +20,4 @@ Peoples:
 
 
 - Raphael
-- Kung foo man
 - iBuddie
-- php
