@@ -578,3 +578,68 @@ void gsc_player_setjumpheight(scr_entref_t ref)
 
     stackPushBool(qtrue);
 }
+void gsc_player_setairjumps(scr_entref_t ref)
+{
+    int id = ref.entnum;
+    int airJumps;
+
+    if (!stackGetParams("i", &airJumps))
+    {
+        stackError("gsc_player_setairjumps() argument is undefined or has a wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    if (id >= MAX_CLIENTS)
+    {
+        stackError("gsc_player_setairjumps() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+
+    customPlayerState[id].airJumpsAvailable = airJumps;
+
+    stackPushBool(qtrue);
+}
+
+
+void gsc_player_setstance(scr_entref_t ref)
+{
+	int id = ref.entnum;
+	char *stance;
+
+	if ( !stackGetParams("s", &stance) )
+	{
+		stackError("gsc_player_setstance() argument is undefined or has a wrong type");
+		stackPushUndefined();
+		return;
+	}
+
+	gentity_t *entity = &g_entities[id];
+
+	if ( entity->client == NULL )
+	{
+		stackError("gsc_player_setstance() entity %i is not a player", id);
+		stackPushUndefined();
+		return;
+	}
+
+	int event;
+
+	if ( strcmp(stance, "stand") == 0 )
+		event = EV_STANCE_FORCE_STAND;
+	else if ( strcmp(stance, "crouch") == 0 )
+		event = EV_STANCE_FORCE_CROUCH;
+	else if ( strcmp(stance, "prone") == 0 )
+		event = EV_STANCE_FORCE_PRONE;
+	else
+	{
+		stackError("gsc_player_setstance() invalid argument '%s'. Valid arguments are: 'stand', 'crouch', 'prone'", stance);
+		stackPushUndefined();
+		return;
+	}
+
+	G_AddPredictableEvent(entity, event, 0);
+
+	stackPushBool(qtrue);
+}

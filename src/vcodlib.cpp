@@ -43,13 +43,14 @@ cvar_t *sv_cracked;
 cvar_t *jump_height;
 cvar_t *bot_reconnectMode;
 cvar_t *sv_allowRcon;
-//cvar_t *g_jumpslowdown;
+cvar_t *jump_height_air;
 
 cHook *hook_clientendframe;
 cHook *hook_com_init;
 cHook *hook_clientThink;
 cHook *hook_cvar_set2;
 cHook *hook_pm_airmove;
+cHook *hook_pm_crashland;
 cHook *hook_g_localizedstringindex;
 cHook *hook_gametype_scripts;
 cHook *hook_sv_addoperatorcommands;
@@ -68,6 +69,8 @@ int codecallback_playerkilled = 0;
 // Custom callbacks
 int codecallback_client_spam = 0;
 int codecallback_playercommand = 0;
+
+
 
 callback_t callbacks[] =
 {
@@ -140,9 +143,14 @@ Com_ParseRestOfLine_t Com_ParseRestOfLine;
 Com_ParseInt_t Com_ParseInt;
 Jump_Check_t Jump_Check;
 
+
 // Resume addresses -----
 uintptr_t resume_addr_Jump_Check;
 uintptr_t resume_addr_Jump_Check_2;
+
+// For bots
+extern playerState_t playerStates[MAX_CLIENTS];
+extern gentity_t gEntities[MAX_CLIENTS];
 
 
 
@@ -184,9 +192,9 @@ void custom_Com_Init(char *commandLine)
     g_resetSlide = Cvar_Get("g_resetSlide", "0", CVAR_ARCHIVE);
     sv_cracked = Cvar_Get("sv_cracked", "0", CVAR_ARCHIVE);
     jump_height = Cvar_Get("jump_height", "39.0", CVAR_ARCHIVE);
+    jump_height_air = Cvar_Get("jump_height_air", "58.5", CVAR_ARCHIVE);
     bot_reconnectMode = Cvar_Get("bot_reconnectMode", "0", CVAR_ARCHIVE);
     sv_allowRcon = Cvar_Get("sv_allowRcon", "0", CVAR_ARCHIVE);
-//    g_jumpslowdown = Cvar_Get("g_jumpslowdown", "0", CVAR_ARCHIVE);
 
     /*
     Force cl_allowDownload on client, otherwise 1.1x can't download to join the server
@@ -1138,6 +1146,44 @@ char *custom_va(const char *format, ...)
     return buf;
 }
 
+//BOTS ----- ZK_LIBCOD
+void custom_SV_BotUserMove(client_t *client)
+{
+	int num;
+	usercmd_t ucmd = {0};
+    
+	num = client - svs.clients;
+    gentity_t *ent;
+
+	if ( client->gentity == NULL )
+		return;
+
+	ucmd.serverTime = svs.time;
+
+	playerState_t *ps = SV_GameClientNum(num);
+
+    ent = &g_entities[num];
+
+	if ( customPlayerState[num].botWeapon )
+		ucmd.weapon = (byte)(customPlayerState[num].botWeapon & 0xFF);
+	else
+		ucmd.weapon = (byte)(ps->weapon & 0xFF);
+
+	if ( ent->client == NULL )
+		return;
+
+	if ( ent->client->sess.archiveTime == 0 )
+	{
+		ucmd.buttons = customPlayerState[num].botButtons;
+		ucmd.forwardmove = customPlayerState[num].botForwardMove;
+		ucmd.rightmove = customPlayerState[num].botRightMove;
+
+        VectorCopy(ent->client->ps.viewangles, ucmd.angles);
+	}
+
+	client->deltaMessage = client->netchan.outgoingSequence - 1;
+}
+
 void custom_SV_ClientThink(int clientNum)
 {
     hook_clientThink->unhook();
@@ -1145,7 +1191,6 @@ void custom_SV_ClientThink(int clientNum)
     *(int *)&ClientThink = hook_clientThink->from;
     ClientThink(clientNum);
     hook_clientThink->hook();
-
 
     customPlayerState[clientNum].frames++;
 
@@ -1169,42 +1214,69 @@ void custom_SV_ClientThink(int clientNum)
 		customPlayerState[clientNum].frames = 0;
 	}
 /*
-if (ucmd->buttons & KEY_MASK_FIRE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_FIRE)) 
-{
-    ucmd->buttons |= KEY_MASK_FIRE;
-}
+	if ( ucmd->buttons & KEY_MASK_FIRE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_FIRE) )
+	{
+		if ( codecallback_attackbutton )
+		{
+			short ret = Scr_ExecEntThread(cl->gentity, codecallback_attackbutton, 0);
+			Scr_FreeThread(ret);
+		}
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_MELEE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_MELEE) )
+	{
+		if ( codecallback_meleebutton )
+		{
+			short ret = Scr_ExecEntThread(cl->gentity, codecallback_meleebutton, 0);
+			Scr_FreeThread(ret);
+		}
+	}
 
-if (ucmd->buttons & KEY_MASK_MELEE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_MELEE)) 
-{
-    ucmd->buttons |= KEY_MASK_MELEE;
-}
-
-if (ucmd->buttons & KEY_MASK_RELOAD && !(customPlayerState[clietNum].previousButtons & KEY_MASK_RELOAD)) 
-{
-    ucmd->buttons |= KEY_MASK_RELOAD;
-}
-
-if (ucmd->buttons & KEY_MASK_PRONE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_PRONE)) 
-{
-    ucmd->buttons |= KEY_MASK_PRONE;
-}
-
-if (ucmd->buttons & KEY_MASK_CROUCH && !(customPlayerState[clientNum].previousButtons & KEY_MASK_CROUCH)) 
-{
-    ucmd->buttons |= KEY_MASK_CROUCH;
-}
-
-if (ucmd->buttons & KEY_MASK_JUMP && !(customPlayerState[clientNum].previousButtons & KEY_MASK_JUMP)) 
-{
-    ucmd->buttons |= KEY_MASK_JUMP;
-}
-
-if (ucmd->buttons & KEY_MASK_ADS_MODE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_ADS_MODE)) 
-{
-    ucmd->buttons |= KEY_MASK_ADS_MODE;
-}
-
-customPlayerState[clientNum].previousButtons = ucmd->buttons;
+	if ( ucmd->buttons & KEY_MASK_RELOAD && !(customPlayerState[clientNum].previousButtons & KEY_MASK_RELOAD) )
+	{
+		if ( codecallback_reloadbutton )
+		{
+			short ret = Scr_ExecEntThread(cl->gentity, codecallback_reloadbutton, 0);
+			Scr_FreeThread(ret);
+		}
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_PRONE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_PRONE) )
+	{
+		if ( codecallback_pronebutton )
+		{
+			short ret = Scr_ExecEntThread(cl->gentity, codecallback_pronebutton, 0);
+			Scr_FreeThread(ret);
+		}
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_CROUCH && !(customPlayerState[clientNum].previousButtons & KEY_MASK_CROUCH) )
+	{
+		if ( codecallback_crouchbutton )
+		{
+			short ret = Scr_ExecEntThread(cl->gentity, codecallback_crouchbutton, 0);
+			Scr_FreeThread(ret);
+		}
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_JUMP && !(customPlayerState[clientNum].previousButtons & KEY_MASK_JUMP) )
+	{
+		if ( codecallback_standbutton )
+		{
+			short ret = Scr_ExecEntThread(cl->gentity, codecallback_standbutton, 0);
+			Scr_FreeThread(ret);
+		}
+	}
+	
+	if ( ucmd->buttons & KEY_MASK_ADS_MODE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_ADS_MODE) )
+	{
+		if ( codecallback_adsbutton )
+		{
+			short ret = Scr_ExecEntThread(cl->gentity, codecallback_adsbutton, 0);
+			Scr_FreeThread(ret);
+		}
+	}
+	customPlayerState[clientNum].previousButtons = ucmd->buttons;
 */
 }
 
@@ -1240,20 +1312,42 @@ int custom_ClientEndFrame(gentity_t *ent)
     return ret;
 }
 
-void custom_PM_AirMove(int *a1, int *a2)
+void custom_PM_CrashLand()
 {
-    /*if (Jump_Check())
+    int clientNum = pm->ps->clientNum;
+    if (customPlayerState[clientNum].overrideJumpHeight_air)
     {
-        printf("####### DOUBLE JUMP\n");
-    }*/
+        // Player landed an airjump, disable overrideJumpHeight_air
+        customPlayerState[clientNum].overrideJumpHeight_air = qfalse;
+    }
+    
+    hook_pm_crashland->unhook();
+    void (*PM_CrashLand)();
+    *(int*)&PM_CrashLand = hook_pm_crashland->from;
+    PM_CrashLand();
+    hook_pm_crashland->hook();
+}
 
-
+void custom_PM_AirMove(pmove_t *pm, int *a2)
+{
+    // Player is in air
+    int clientNum = pm->ps->clientNum;
+    if (customPlayerState[clientNum].airJumpsAvailable > 0)
+    {
+        // Player is allowed to jump, enable overrideJumpHeight_air
+        customPlayerState[clientNum].overrideJumpHeight_air = qtrue;
+        customPlayerState[clientNum].jumpHeight = jump_height_air->value;
+        if(Jump_Check())
+            customPlayerState[clientNum].airJumpsAvailable--;
+    }
+    
     hook_pm_airmove->unhook();
-    void (*PM_AirMove)(int *a1, int *a2);
-    *(int *)&PM_AirMove = hook_pm_airmove->from;
-    PM_AirMove(a1, a2);
+    void (*PM_AirMove)(pmove_t *pm, int *a2);
+    *(int*)&PM_AirMove = hook_pm_airmove->from;
+    PM_AirMove(pm, a2);
     hook_pm_airmove->hook();
 }
+
 
 // ioquake3 rate limit connectionless requests
 // https://github.com/ioquake/ioq3/blob/master/code/server/sv_main.c
@@ -1562,43 +1656,7 @@ void hook_SV_DirectConnect(netadr_t from)
     SV_DirectConnect(from);
 }
 
-//BOTS ----- ZK_LIBCOD
-/*
-void custom_SV_BotUserMove(client_t *client)
-{
-	int num;
-	usercmd_t ucmd = {0};
 
-	if ( client->gentity == NULL )
-		return;
-
-	num = client - svs.clients;
-	ucmd.serverTime = svs.time;
-
-	playerState_t *ps = SV_GameClientNum(num);
-    gentity_t *ent = SV_GentityNum(num);
-
-	if ( customPlayerState[num].botWeapon )
-		ucmd.weapon = (byte)(customPlayerState[num].botWeapon & 0xFF);
-	else
-		ucmd.weapon = (byte)(ps->weapon & 0xFF);
-
-	if ( ent->client == NULL )
-		return;
-
-	if ( ent->client->sess.archiveTime == 0 )
-	{
-		ucmd.buttons = customPlayerState[num].botButtons;
-		ucmd.forwardmove = customPlayerState[num].botForwardMove;
-		ucmd.rightmove = customPlayerState[num].botRightMove;
-
-        VectorCopy(ent->client->ps.viewangles, ucmd.angles);
-	}
-
-	client->deltaMessage = client->netchan.outgoingSequence - 1;
-	custom_SV_ClientThink(client, &ucmd);
-}
-*/
 
 void hook_SV_AuthorizeIpPacket(netadr_t from)
 {
@@ -1808,6 +1866,7 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
 
 
 
+
     hook_call((int)dlsym(ret, "vmMain") + 0xB0, (int)hook_ClientCommand);
     hook_call((int)dlsym(ret, "ClientEndFrame") + 0x311, (int)hook_StuckInClient);
 
@@ -1851,6 +1910,9 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     hook_clientendframe->hook();
     hook_pm_airmove = new cHook((int)dlsym(ret, "_init") + 0x7B98, (int)custom_PM_AirMove);
     hook_pm_airmove->hook();
+    hook_pm_crashland = new cHook((int)dlsym(ret, "_init") + 0x88C4, (int)custom_PM_CrashLand);
+    hook_pm_crashland->hook();
+
 
     return ret;
 }
@@ -1890,6 +1952,9 @@ public:
         hook_jmp(0x080717a4, (int)custom_FS_ReferencedPakChecksums);
         hook_jmp(0x080716cc, (int)custom_FS_ReferencedPakNames);
         hook_jmp(0x080872ec, (int)custom_SV_ExecuteClientMessage);
+
+
+        hook_jmp(0x0808cccc, (int)custom_SV_BotUserMove);
 
 
         // Patch q3infoboom

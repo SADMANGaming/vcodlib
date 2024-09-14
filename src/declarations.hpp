@@ -451,6 +451,14 @@ typedef struct
 
 typedef enum
 {
+	EV_NONE = 0,
+    EV_STANCE_FORCE_STAND,
+	EV_STANCE_FORCE_CROUCH,
+	EV_STANCE_FORCE_PRONE
+} entity_event_t;
+
+typedef enum
+{
     PM_NORMAL = 0x0,
     PM_NORMAL_LINKED = 0x1,
     PM_NOCLIP = 0x2,
@@ -460,6 +468,8 @@ typedef enum
     PM_DEAD = 0x6,
     PM_DEAD_LINKED = 0x7,
 } pmtype_t;
+
+
 
 typedef enum
 {
@@ -562,6 +572,7 @@ typedef struct
     unsigned int messageAcked;
     int messageSize;
 } clientSnapshot_t;
+
 
 typedef struct client_s
 {
@@ -779,8 +790,11 @@ typedef struct customPlayerState_s
     int jumpHeight;
 	int botButtons;
 	int botWeapon;
+	int previousButtons;
 	char botForwardMove;
 	char botRightMove;
+    int airJumpsAvailable;
+    qboolean overrideJumpHeight_air;
 } customPlayerState_t;
 
 typedef struct callback_s

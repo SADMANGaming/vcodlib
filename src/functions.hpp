@@ -104,6 +104,9 @@ static const Cvar_VariableString_t Cvar_VariableString = (Cvar_VariableString_t)
 //
 
 // SV
+//typedef void (*SV_BotUserMove_t)(int clientNum);
+//static SV_BotUserMove_t SV_BotUserMove = (SV_BotUserMove_t)0x0808cccc;
+
 typedef void (*SV_ClientEnterWorld_t)(client_t *cl, usercmd_t *cmd);
 static const SV_ClientEnterWorld_t SV_ClientEnterWorld = (SV_ClientEnterWorld_t)0x080877d8;
 

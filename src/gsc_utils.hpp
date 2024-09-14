@@ -17,7 +17,6 @@ void gsc_utils_toupper();
 void gsc_utils_tolower();
 void gsc_utils_strtok();
 
-void gsc_utils_torgb();
 
 void gsc_utils_replace();
 void gsc_utils_getsystemtime();
