@@ -1146,42 +1146,41 @@ char *custom_va(const char *format, ...)
     return buf;
 }
 
-//BOTS ----- ZK_LIBCOD
 void custom_SV_BotUserMove(client_t *client)
 {
-	int num;
-	usercmd_t ucmd = {0};
-    
-	num = client - svs.clients;
-    gentity_t *ent;
+    int num;
+    usercmd_t ucmd = {0};
 
-	if ( client->gentity == NULL )
-		return;
+    if(client->gentity == NULL)
+        return;
 
-	ucmd.serverTime = svs.time;
+    num = client - svs.clients;
+    ucmd.serverTime = svs.time;
 
-	playerState_t *ps = SV_GameClientNum(num);
+    playerState_t *ps = SV_GameClientNum(num);
+    gentity_t *ent = &g_entities[num];
 
-    ent = &g_entities[num];
+    if(customPlayerState[num].botWeapon)
+        ucmd.weapon = (byte)(customPlayerState[num].botWeapon & 0xFF);
+    else
+        ucmd.weapon = (byte)(ps->weapon & 0xFF);
 
-	if ( customPlayerState[num].botWeapon )
-		ucmd.weapon = (byte)(customPlayerState[num].botWeapon & 0xFF);
-	else
-		ucmd.weapon = (byte)(ps->weapon & 0xFF);
+    if(ent->client == NULL)
+        return;
 
-	if ( ent->client == NULL )
-		return;
+    if (ent->client->sess.archiveTime == 0)
+    {
+        ucmd.buttons = customPlayerState[num].botButtons;
+        ucmd.wbuttons = customPlayerState[num].botWButtons;
+        ucmd.forwardmove = customPlayerState[num].botForwardMove;
+        ucmd.rightmove = customPlayerState[num].botRightMove;
+        ucmd.upmove = customPlayerState[num].botUpMove;
 
-	if ( ent->client->sess.archiveTime == 0 )
-	{
-		ucmd.buttons = customPlayerState[num].botButtons;
-		ucmd.forwardmove = customPlayerState[num].botForwardMove;
-		ucmd.rightmove = customPlayerState[num].botRightMove;
+        VectorCopy(ent->client->sess.cmd.angles, ucmd.angles);
+    }
 
-        VectorCopy(ent->client->ps.viewangles, ucmd.angles);
-	}
-
-	client->deltaMessage = client->netchan.outgoingSequence - 1;
+    client->deltaMessage = client->netchan.outgoingSequence - 1;
+    SV_ClientThink(client, &ucmd);
 }
 
 void custom_SV_ClientThink(int clientNum)

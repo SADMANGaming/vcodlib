@@ -37,6 +37,7 @@
 #define	MAX_NAME_LENGTH             32
 #define MAX_RELIABLE_COMMANDS       64
 #define MAX_STRINGLENGTH            1024
+#define MAX_NETNAME                 36
 
 #define CVAR_NOFLAG             0               // 0x0000
 #define CVAR_ARCHIVE            (1 << 0)        // 0x0001
@@ -539,8 +540,15 @@ typedef struct
     int deaths;
     byte pad[4];
     clientConnected_t connected;
-    //...
+    usercmd_t cmd;
+    usercmd_t oldcmd;
+    qboolean localClient;
+    byte pad2[8];
+    char netname[MAX_NETNAME];
+    int maxHealth;
+    byte pad3[128];
 } clientSession_t;
+
 
 struct gclient_s
 {
@@ -788,11 +796,12 @@ typedef struct customPlayerState_s
     int ufo;
     qboolean overrideJumpHeight;
     int jumpHeight;
-	int botButtons;
-	int botWeapon;
-	int previousButtons;
-	char botForwardMove;
-	char botRightMove;
+    int botButtons;
+    int botWButtons;
+    int botWeapon;
+    char botForwardMove;
+    char botRightMove;
+    char botUpMove;
     int airJumpsAvailable;
     qboolean overrideJumpHeight_air;
 } customPlayerState_t;

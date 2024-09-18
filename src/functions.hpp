@@ -1,6 +1,18 @@
 #ifndef _FUNCTIONS_HPP_
 #define _FUNCTIONS_HPP_
 
+//
+typedef gentity_t * (*SV_ClientThink_t)(client_t *cl, usercmd_t *cmd);
+static const SV_ClientThink_t SV_ClientThink = (SV_ClientThink_t)0x0808789c;
+
+typedef void (*G_AddEvent_t)(gentity_t *ent, int event, int eventParm);
+static const G_AddEvent_t G_AddEvent = (G_AddEvent_t)0x000258d0;
+
+typedef void (*G_AddPredictableEvent_t)(gentity_t *ent, int event, int eventParm);
+static const G_AddPredictableEvent_t G_AddPredictableEvent = (G_AddPredictableEvent_t)0x00024010;
+
+
+
 // trap
 typedef void (*trap_Argv_t)(int arg, char *buffer, int bufferLength);
 

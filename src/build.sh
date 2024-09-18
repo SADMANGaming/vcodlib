@@ -129,9 +129,6 @@ $cc $debug $options $constants -c gsc_weapons.cpp -o objects/gsc_weapons.opp
 echo "##### COMPILE GSC_BOTS.CPP #####"
 $cc $debug $options $constants -c gsc_bots.cpp -o objects/gsc_bots.opp
 
-echo "##### COMPILE GSC_BGAME.CPP #####"
-$cc $debug $options $constants -c gsc_bgame.cpp -o objects/gsc_bgame.opp
-
 echo "##### COMPILE JUMP.CPP #####"
 $cc $debug $options $constants -c jump.cpp -o objects/jump.opp
 

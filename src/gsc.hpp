@@ -31,7 +31,6 @@
 #include "gsc_utils.hpp"
 #include "gsc_weapons.hpp"
 #include "gsc_bots.hpp"
-#include "gsc_bgame.hpp"
 
 #if COMPILE_SQLITE == 1
 #include "gsc_sqlite.hpp"
