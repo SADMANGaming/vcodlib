@@ -109,7 +109,7 @@ scr_method_t scriptMethods[] =
     {"setSpeed", gsc_player_setspeed, 0},
     {"setJumpHeight", gsc_player_setjumpheight, 0},
     {"setAirJumps", gsc_player_setairjumps, 0},
-	{"setStance", gsc_player_setstance, 0},
+//	{"setStance", gsc_player_setstance, 0},
     {"getFps", gsc_player_getfps, 0},
     {"isOnLadder", gsc_player_isonladder, 0},
     {"setUfo", gsc_player_setufo, 0},

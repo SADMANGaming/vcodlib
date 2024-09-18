@@ -189,7 +189,7 @@ void gsc_player_button_up(scr_entref_t ref)
 
     client_t *client = &svs.clients[id];
 
-    stackPushBool(client->lastUsercmd.upmove == KEY_MASK_MOVEUP ? qtrue : qfalse);
+    stackPushBool(client->lastUsercmd.upmove == KEY_MASK_FORWARD ? qtrue : qfalse);
 }
 
 void gsc_player_button_down(scr_entref_t ref)
@@ -205,7 +205,7 @@ void gsc_player_button_down(scr_entref_t ref)
 
     client_t *client = &svs.clients[id];
 
-    stackPushBool(client->lastUsercmd.upmove == KEY_MASK_MOVEDOWN ? qtrue : qfalse);
+    stackPushBool(client->lastUsercmd.upmove == KEY_MASK_BACK ? qtrue : qfalse);
 }
 
 void gsc_player_button_leanleft(scr_entref_t ref)
@@ -602,7 +602,7 @@ void gsc_player_setairjumps(scr_entref_t ref)
     stackPushBool(qtrue);
 }
 
-
+/*
 void gsc_player_setstance(scr_entref_t ref)
 {
 	int id = ref.entnum;
@@ -624,6 +624,7 @@ void gsc_player_setstance(scr_entref_t ref)
 		return;
 	}
 
+
 	int event;
 
 	if ( strcmp(stance, "stand") == 0 )
@@ -643,3 +644,4 @@ void gsc_player_setstance(scr_entref_t ref)
 
 	stackPushBool(qtrue);
 }
+*/

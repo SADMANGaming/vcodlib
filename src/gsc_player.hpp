@@ -34,7 +34,7 @@ void gsc_player_setufo(scr_entref_t ref);
 void gsc_player_connectionlesspackettoclient(scr_entref_t ref);
 
 
-void gsc_player_setstance(scr_entref_t ref);
+//void gsc_player_setstance(scr_entref_t ref);
 void gsc_player_setgravity(scr_entref_t ref);
 void gsc_player_isbot(scr_entref_t ref);
 void gsc_player_getlastconnecttime(scr_entref_t ref);
