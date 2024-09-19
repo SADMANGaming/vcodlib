@@ -8,7 +8,7 @@ static const SV_ClientThink_t SV_ClientThink = (SV_ClientThink_t)0x00077c7c;
 typedef void (*G_AddEvent_t)(gentity_t *ent, int event, int eventParm);
 
 typedef void (*G_AddPredictableEvent_t)(gentity_t *ent, int event, int eventParm);
-static const G_AddPredictableEvent_t G_AddPredictableEvent = (G_AddPredictableEvent_t)0x00024010;
+//0x00024010
 
 
 
