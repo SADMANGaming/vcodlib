@@ -4,7 +4,6 @@
 #endif
 
 #include <string>
-
 #include "gsc_utils.hpp"
 
 void gsc_utils_sendcommandtoclient()
@@ -448,7 +447,7 @@ void gsc_utils_ban()
             std::string param = Scr_GetString(i);
             command.append(param);
         }
-        Cbuf_ExecuteText(EXEC_APPEND, custom_va(command.c_str()));
+        Cbuf_ExecuteText(EXEC_APPEND, va(command.c_str()));
     }
 }
 
@@ -464,9 +463,43 @@ void gsc_utils_unban()
             std::string param = Scr_GetString(i);
             command.append(param);
         }
-        Cbuf_ExecuteText(EXEC_APPEND, custom_va(command.c_str()));
+        Cbuf_ExecuteText(EXEC_APPEND, va(command.c_str()));
     }
 }
+
+void gsc_utils_istringtostring()
+{
+    const char *istring;
+
+    if ( !stackGetParams("s", &istring) )
+    {
+        stackError("gsc_utils_istringtostring() one argument is undefined or has a wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    Scr_GetIString(istring);
+
+    stackPushBool(qtrue);
+}
+
+void gsc_utils_stringtoistring()
+{
+    const char *string;
+
+    if ( !stackGetParams("s", &string) )
+    {
+        stackError("gsc_utils_stringtoistring() one argument is undefined or has a wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    Scr_AddIString(string);
+
+    stackPushBool(qtrue);
+}
+
+
 
 #if COMPILE_LIBCURL == 1
 void gsc_utils_webhookmessage() // TODO: See if needs threading

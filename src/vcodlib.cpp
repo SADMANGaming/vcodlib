@@ -10,6 +10,7 @@
 #include <iostream>
 #include <cstring>
 #include <vector>
+#include <cmath>    // fabs, sqrt
 
 #include "gsc.hpp"
 
@@ -20,15 +21,20 @@ cvar_t *com_cl_running;
 cvar_t *com_dedicated;
 cvar_t *com_logfile;
 cvar_t *com_sv_running;
+cvar_t *fs_game;
 cvar_t *sv_allowDownload;
 cvar_t *sv_floodProtect;
+cvar_t *sv_fps;
 cvar_t *sv_gametype;
-cvar_t *sv_maxclients;
 cvar_t *sv_mapRotation;
 cvar_t *sv_mapRotationCurrent;
+cvar_t *sv_master[MAX_MASTER_SERVERS];
+cvar_t *sv_maxclients;
+cvar_t *sv_maxRate;
 cvar_t *sv_pure;
 cvar_t *sv_rconPassword;
 cvar_t *sv_serverid;
+cvar_t *sv_showAverageBPS;
 cvar_t *sv_showCommands;
 
 // Custom cvars
@@ -44,9 +50,13 @@ cvar_t *jump_height;
 cvar_t *bot_reconnectMode;
 cvar_t *sv_allowRcon;
 cvar_t *jump_height_air;
+cvar_t *jump_bounceEnable;
+cvar_t *sv_fastDownload;
+cvar_t *sv_downloadNotifications;
 
 cHook *hook_clientendframe;
 cHook *hook_com_init;
+cHook *hook_DeathmatchScoreboardMessage;
 cHook *hook_clientThink;
 cHook *hook_cvar_set2;
 cHook *hook_pm_airmove;
@@ -90,12 +100,14 @@ gentity_t* g_entities;
 gclient_t* g_clients;
 level_locals_t* level;
 pmove_t* pm;
-
 stringIndex_t* scr_const;
 
 // Game lib functions
+AxisToAngles_t AxisToAngles;
 G_Say_t G_Say;
 G_RegisterCvars_t G_RegisterCvars;
+G_AddPredictableEvent_t G_AddPredictableEvent;
+G_TempEntity_t G_TempEntity;
 trap_SendServerCommand_t trap_SendServerCommand;
 trap_GetConfigstringConst_t trap_GetConfigstringConst;
 trap_GetConfigstring_t trap_GetConfigstring;
@@ -103,6 +115,7 @@ BG_GetNumWeapons_t BG_GetNumWeapons;
 BG_GetInfoForWeapon_t BG_GetInfoForWeapon;
 BG_GetWeaponIndexForName_t BG_GetWeaponIndexForName;
 BG_AnimationIndexForString_t BG_AnimationIndexForString;
+BG_AnimScriptEvent_t BG_AnimScriptEvent;
 Scr_GetFunctionHandle_t Scr_GetFunctionHandle;
 Scr_GetNumParam_t Scr_GetNumParam;
 Scr_IsSystemActive_t Scr_IsSystemActive;
@@ -130,6 +143,9 @@ Scr_Error_t Scr_Error;
 Scr_ObjectError_t Scr_ObjectError;
 Scr_GetConstString_t Scr_GetConstString;
 Scr_ParamError_t Scr_ParamError;
+Scr_AddIString_t Scr_AddIString;
+Scr_GetIString_t Scr_GetIString;
+Scr_ConstructMessageString_t Scr_ConstructMessageString;
 Q_strlwr_t Q_strlwr;
 Q_strupr_t Q_strupr;
 Q_strcat_t Q_strcat;
@@ -142,15 +158,18 @@ Com_SkipRestOfLine_t Com_SkipRestOfLine;
 Com_ParseRestOfLine_t Com_ParseRestOfLine;
 Com_ParseInt_t Com_ParseInt;
 Jump_Check_t Jump_Check;
+va_t va;
+_VectorLength_t _VectorLength;
+vectoangles_t vectoangles;
+PM_ClipVelocity_t PM_ClipVelocity;
+PM_GetEffectiveStance_t PM_GetEffectiveStance;
+LookAtKiller_t LookAtKiller;
+
 
 
 // Resume addresses -----
 uintptr_t resume_addr_Jump_Check;
 uintptr_t resume_addr_Jump_Check_2;
-
-// For bots
-extern playerState_t playerStates[MAX_CLIENTS];
-extern gentity_t gEntities[MAX_CLIENTS];
 
 
 
@@ -177,6 +196,10 @@ void custom_Com_Init(char *commandLine)
     sv_rconPassword = Cvar_FindVar("rconpassword");
     sv_serverid = Cvar_FindVar("sv_serverid");
     sv_showCommands = Cvar_FindVar("sv_showCommands");
+    sv_fps = Cvar_FindVar("sv_fps");
+    sv_maxRate = Cvar_FindVar("sv_maxRate");
+    sv_showAverageBPS = Cvar_FindVar("sv_showAverageBPS");
+    sv_showCommands = Cvar_FindVar("sv_showCommands");
 
     // Register custom cvars
     Cvar_Get("vcodlib", "1", CVAR_SERVERINFO);
@@ -195,6 +218,9 @@ void custom_Com_Init(char *commandLine)
     jump_height_air = Cvar_Get("jump_height_air", "58.5", CVAR_ARCHIVE);
     bot_reconnectMode = Cvar_Get("bot_reconnectMode", "0", CVAR_ARCHIVE);
     sv_allowRcon = Cvar_Get("sv_allowRcon", "0", CVAR_ARCHIVE);
+    sv_fastDownload = Cvar_Get("sv_fastDownload", "0", CVAR_ARCHIVE);
+    sv_downloadNotifications = Cvar_Get("sv_downloadNotifications", "0", CVAR_ARCHIVE);
+    jump_bounceEnable = Cvar_Get("jump_bounceEnable", "0", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
 
     /*
     Force cl_allowDownload on client, otherwise 1.1x can't download to join the server
@@ -291,7 +317,7 @@ const char* custom_FS_ReferencedPakChecksums(void)
         if(FS_svrPak(search->pak->pakBasename))
             continue;
         
-        Q_strcat(info, sizeof( info ), custom_va("%i ", search->pak->checksum));
+        Q_strcat(info, sizeof( info ), va("%i ", search->pak->checksum));
     }
 
     return info;
@@ -368,6 +394,213 @@ int custom_G_LocalizedStringIndex(const char *string)
     return i;
 }
 
+
+
+
+
+
+
+static int SV_RateMsec(client_t *client, int messageSize)
+{
+    int rate;
+    int rateMsec;
+    
+    if (messageSize > 1500)
+    {
+        messageSize = 1500;
+    }
+    rate = client->rate;
+    if (sv_maxRate->integer)
+    {
+        if (sv_maxRate->integer < 1000)
+        {
+            Cvar_Set("sv_maxRate", "");
+        }
+
+        if (sv_maxRate->integer < rate)
+        {
+            rate = sv_maxRate->integer;
+        }
+    }
+
+    rateMsec = (1000 * messageSize + (HEADER_RATE_BYTES * 1000)) / rate;
+    /*if (sv_debugRate->integer)
+    {
+        Com_Printf("It would take %ims to send %i bytes to client %s (rate %i)\n", rateMsec, messageSize, client->name, client->rate);
+    }*/
+    return rateMsec;
+}
+
+void custom_SV_SendClientMessages(void)
+{
+    int i;
+    client_t *cl;
+    int numclients = 0;
+
+    sv.bpsTotalBytes = 0;
+    sv.ubpsTotalBytes = 0;
+
+    for (i = 0; i < sv_maxclients->integer; i++)
+    {
+        cl = &svs.clients[i];
+
+        if(!cl->state)
+            continue;
+        if(svs.time < cl->nextSnapshotTime)
+            continue;
+
+        numclients++;
+
+        if (sv_fastDownload->integer && cl->download)
+        {
+            for (int j = 0; j < 1 + ((sv_fps->integer / 20) * MAX_DOWNLOAD_WINDOW); j++)
+            {
+                while (cl->netchan.unsentFragments)
+                {
+                    cl->nextSnapshotTime = svs.time + SV_RateMsec(cl, cl->netchan.unsentLength - cl->netchan.unsentFragmentStart);
+                    SV_Netchan_TransmitNextFragment(&cl->netchan);
+                }
+                SV_SendClientSnapshot(cl);
+            }
+        }
+        else
+        {
+            if (cl->netchan.unsentFragments)
+            {
+                cl->nextSnapshotTime = svs.time + SV_RateMsec(cl, cl->netchan.unsentLength - cl->netchan.unsentFragmentStart);
+                SV_Netchan_TransmitNextFragment(&cl->netchan);
+                continue;
+            }
+            SV_SendClientSnapshot(cl);
+        }
+    }
+
+    if (sv_showAverageBPS->integer && numclients > 0)
+    {
+        float ave = 0, uave = 0;
+
+        for (i = 0; i < MAX_BPS_WINDOW - 1; i++)
+        {
+            sv.bpsWindow[i] = sv.bpsWindow[i + 1];
+            ave += sv.bpsWindow[i];
+
+            sv.ubpsWindow[i] = sv.ubpsWindow[i + 1];
+            uave += sv.ubpsWindow[i];
+        }
+
+        sv.bpsWindow[MAX_BPS_WINDOW - 1] = sv.bpsTotalBytes;
+        ave += sv.bpsTotalBytes;
+
+        sv.ubpsWindow[MAX_BPS_WINDOW - 1] = sv.ubpsTotalBytes;
+        uave += sv.ubpsTotalBytes;
+
+        if(sv.bpsTotalBytes >= sv.bpsMaxBytes)
+            sv.bpsMaxBytes = sv.bpsTotalBytes;
+
+        if(sv.ubpsTotalBytes >= sv.ubpsMaxBytes)
+            sv.ubpsMaxBytes = sv.ubpsTotalBytes;
+
+        sv.bpsWindowSteps++;
+
+        if (sv.bpsWindowSteps >= MAX_BPS_WINDOW)
+        {
+            float comp_ratio;
+
+            sv.bpsWindowSteps = 0;
+
+            ave = ave / (float)MAX_BPS_WINDOW;
+            uave = uave / (float)MAX_BPS_WINDOW;
+
+            comp_ratio = (1 - ave / uave) * 100.f;
+            sv.ucompAve += comp_ratio;
+            sv.ucompNum++;
+
+            Com_DPrintf("bpspc(%2.0f) bps(%2.0f) pk(%i) ubps(%2.0f) upk(%i) cr(%2.2f) acr(%2.2f)\n",
+                        ave / (float)numclients,
+                        ave,
+                        sv.bpsMaxBytes,
+                        uave,
+                        sv.ubpsMaxBytes,
+                        comp_ratio,
+                        sv.ucompAve / sv.ucompNum);
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void custom_SV_SendMessageToClient(msg_t *msg, client_t *client)
+{
+    byte data[MAX_MSGLEN];
+    int compressedSize;
+    int rateMsec;
+    
+    memcpy(data, msg->data, sizeof(data));
+    compressedSize = MSG_WriteBitsCompress(msg->data + 4, data + 4, msg->cursize - 4) + 4;
+    if (client->dropReason)
+    {
+        SV_DropClient(client, client->dropReason);
+    }
+    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = compressedSize;
+    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.time;
+    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = -1;
+    SV_Netchan_Transmit(client, data, compressedSize);
+
+    if (client->netchan.remoteAddress.type == NA_LOOPBACK || Sys_IsLANAddress(client->netchan.remoteAddress) || (sv_fastDownload->integer && client->download))
+    {
+        client->nextSnapshotTime = svs.time - 1;
+        return;
+    }
+
+    rateMsec = SV_RateMsec(client, compressedSize);
+    if (rateMsec < client->snapshotMsec)
+    {
+        rateMsec = client->snapshotMsec;
+        client->rateDelayed = qfalse;
+    }
+    else
+    {
+        client->rateDelayed = qtrue;
+    }
+    client->nextSnapshotTime = svs.time + rateMsec;
+    if (client->state != CS_ACTIVE)
+    {
+        if (!*client->downloadName && client->nextSnapshotTime < svs.time + 1000)
+        {
+            client->nextSnapshotTime = svs.time + 1000;
+        }
+    }
+    sv.bpsTotalBytes += compressedSize;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 void hook_ClientCommand(int clientNum)
 {
     if(!Scr_IsSystemActive())
@@ -418,6 +651,70 @@ const char* hook_AuthorizeState(int arg)
     return s;
 }
 
+void custom_DeathmatchScoreboardMessage(gentity_t *ent)
+{
+    int ping;
+    int clientNum;
+    int numSorted;
+    gclient_t *client;
+    int len;
+    int i;
+    int stringlength;
+    char string[1400];
+    char entry[1024];
+
+    string[0] = 0;
+    stringlength = 0;
+
+    numSorted = level->numConnectedClients;
+
+    if(level->numConnectedClients > MAX_CLIENTS)
+        numSorted = MAX_CLIENTS;
+
+    for (i = 0; i < numSorted; i++)
+    {
+        clientNum = level->sortedClients[i];
+        client = &level->clients[clientNum];
+        
+        if (client->sess.connected == CON_CONNECTING)
+        {
+            Com_sprintf(
+                entry,
+                0x400u,
+                " %i %i %i %i %i",
+                level->sortedClients[i],
+                client->sess.score,
+                -1,
+                client->sess.deaths,
+                client->sess.statusIcon);
+        }
+        else
+        {
+            ping = svs.clients[clientNum].ping;
+
+            Com_sprintf(
+                entry,
+                0x400u,
+                " %i %i %i %i %i",
+                level->sortedClients[i],
+                client->sess.score,
+                ping,
+                client->sess.deaths,
+                client->sess.statusIcon);
+        }
+
+        len = strlen(entry);
+
+        if(stringlength + len > 1024)
+            break;
+
+        strcpy(&string[stringlength], entry);
+        stringlength += len;
+    }
+    
+    trap_SendServerCommand(ent - g_entities, SV_CMD_RELIABLE, va("b %i %i %i%s", i, level->teamScores[1], level->teamScores[2], string));
+}
+
 void custom_SV_SpawnServer(char *server)
 {
     hook_sv_spawnserver->unhook();
@@ -426,6 +723,7 @@ void custom_SV_SpawnServer(char *server)
     SV_SpawnServer(server);
     hook_sv_spawnserver->hook();
 
+// Start
 	client_t *cl;
     int i;
 
@@ -436,7 +734,7 @@ void custom_SV_SpawnServer(char *server)
 			continue;
 		}
 
-		/* New: sv_botReconnectMode cvar */
+//		 New: sv_botReconnectMode cvar
 		if ( cl->bIsTestClient )
 		{
 			if ( bot_reconnectMode->integer == 1 )
@@ -448,6 +746,7 @@ void custom_SV_SpawnServer(char *server)
     }
 
 // End lol
+
 
 #if COMPILE_SQLITE == 1
     free_sqlite_db_stores_and_tasks();
@@ -505,11 +804,6 @@ void sendMessageTo_inGameAdmin_orServerConsole(client_t *cl, std::string message
         finalMessage.append("\n");
         Com_Printf(finalMessage.c_str());
     }
-}
-
-void rizzup(client_t *cl)
-{
-    SV_SendServerCommand(cl, 0, "e \"This server is powered by CoDExtended.\"");
 }
 
 
@@ -979,6 +1273,90 @@ static void unban()
     }
 }
 
+
+
+void Info_Print( const char *s ) {
+	char key[512];
+	char value[512];
+	char    *o;
+	int l;
+
+	if ( *s == '\\' ) {
+		s++;
+	}
+	while ( *s )
+	{
+		o = key;
+		while ( *s && *s != '\\' )
+			*o++ = *s++;
+
+		l = o - key;
+		if ( l < 20 ) {
+			memset( o, ' ', 20 - l );
+			key[20] = 0;
+		} else {
+			*o = 0;
+		}
+		Com_Printf( "%s", key );
+
+		if ( !*s ) {
+			Com_Printf( "MISSING VALUE\n" );
+			return;
+		}
+
+		o = value;
+		s++;
+		while ( *s && *s != '\\' )
+			*o++ = *s++;
+		*o = 0;
+
+		if ( *s ) {
+			s++;
+		}
+		Com_Printf( "%s\n", value );
+	}
+}
+
+
+static void dumpuser(void) {
+    client_t *cl;
+    int clientNum;
+
+    if (!com_sv_running->integer) {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: info <clientnum>\n");
+        return;
+    }
+
+    clientNum = atoi(Cmd_Argv(1));
+
+    if (clientNum < 0 || clientNum >= sv_maxclients->integer) {
+        Com_Printf("Invalid client number: %d\n", clientNum);
+        return;
+    }
+
+    cl = &svs.clients[clientNum];
+
+    if (!cl || cl->state < CS_CONNECTED) {
+        Com_Printf("Player %d is not on the server or not connected.\n", clientNum);
+        return;
+    }
+
+    // Print user info
+    Com_Printf("userinfo for client %d\n", clientNum);
+    Com_Printf("-----------------------\n");
+    Info_Print(cl->userinfo);
+}
+
+
+
+
+
+
 void custom_SV_AddOperatorCommands()
 {
     hook_sv_addoperatorcommands->unhook();
@@ -988,6 +1366,7 @@ void custom_SV_AddOperatorCommands()
 
     Cmd_AddCommand("ban", ban);
     Cmd_AddCommand("unban", unban);
+    Cmd_AddCommand("v_dumpuser", dumpuser);
 
     hook_sv_addoperatorcommands->hook();
 }
@@ -1053,6 +1432,136 @@ void custom_SV_BeginDownload_f(client_t *cl)
     *(int *)&SV_BeginDownload_f = hook_sv_begindownload_f->from;
     SV_BeginDownload_f(cl);
     hook_sv_begindownload_f->hook();
+}
+void SV_WriteDownloadErrorToClient(client_t *cl, msg_t *msg, char *errorMessage)
+{
+    MSG_WriteByte(msg, svc_download);
+    MSG_WriteShort(msg, 0);
+    MSG_WriteLong(msg, -1);
+    MSG_WriteString(msg, errorMessage);
+    *cl->downloadName = 0;
+}
+void custom_SV_WriteDownloadToClient(client_t *cl, msg_t *msg)
+{
+    int curindex;
+    int blksize;
+    char downloadNameNoExt[MAX_QPATH];
+    char errorMessage[MAX_STRINGLENGTH];
+
+    if(!*cl->downloadName)
+        return;
+    
+    cl->state = CS_CONNECTED;
+    cl->rate = 25000;
+    cl->snapshotMsec = 50;
+
+    if (!cl->download)
+    {
+        if (!sv_allowDownload->integer)
+        {
+            Com_Printf("clientDownload: %d : \"%s\" download disabled\n", cl - svs.clients, cl->downloadName);
+
+            if(sv_pure->integer)
+                Com_sprintf(errorMessage, sizeof(errorMessage), "EXE_AUTODL_SERVERDISABLED_PURE\x15%s", cl->downloadName);
+            else
+                Com_sprintf(errorMessage, sizeof(errorMessage), "EXE_AUTODL_SERVERDISABLED\x15%s", cl->downloadName);
+
+            SV_WriteDownloadErrorToClient(cl, msg, errorMessage);
+            return;
+        }
+
+        Q_strncpyz(downloadNameNoExt, cl->downloadName, strlen(cl->downloadName) - 3);
+        if (FS_iwPak(downloadNameNoExt, "main"))
+        {
+            Com_Printf("clientDownload: %d : \"%s\" cannot download id pk3 files\n", cl - svs.clients, cl->downloadName);
+            Com_sprintf(errorMessage, sizeof(errorMessage), "EXE_CANTAUTODLGAMEPAK\x15%s", cl->downloadName);
+            SV_WriteDownloadErrorToClient(cl, msg, errorMessage);
+            return;
+        }
+
+        if ((cl->downloadSize = FS_SV_FOpenFileRead(cl->downloadName, &cl->download)) <= 0)
+        {
+            Com_Printf("clientDownload: %d : \"%s\" file not found on server\n", cl - svs.clients, cl->downloadName);
+            Com_sprintf(errorMessage, sizeof(errorMessage), "EXE_AUTODL_FILENOTONSERVER\x15%s", cl->downloadName);
+            SV_WriteDownloadErrorToClient(cl, msg, errorMessage);
+            return;
+        }
+
+        // Init download
+        Com_Printf("clientDownload: %d : beginning \"%s\"\n", cl - svs.clients, cl->downloadName);
+        cl->downloadCurrentBlock = cl->downloadClientBlock = cl->downloadXmitBlock = 0;
+        cl->downloadCount = 0;
+        cl->downloadEOF = qfalse;
+
+        if(sv_downloadNotifications->integer)
+            SV_SendServerCommand(0, SV_CMD_CAN_IGNORE, "f \"%s^7 downloads %s\"", cl->name, cl->downloadName);
+    }
+    
+    while (cl->downloadCurrentBlock - cl->downloadClientBlock < MAX_DOWNLOAD_WINDOW && cl->downloadSize != cl->downloadCount)
+    {
+        curindex = (cl->downloadCurrentBlock % MAX_DOWNLOAD_WINDOW);
+
+        blksize = MAX_DOWNLOAD_BLKSIZE;
+        if (sv_fastDownload->integer)
+            blksize = MAX_DOWNLOAD_BLKSIZE_FAST;
+        
+        if(!cl->downloadBlocks[curindex])
+            cl->downloadBlocks[curindex] = (unsigned char *)Z_MallocInternal(MAX_DOWNLOAD_BLKSIZE_FAST); // Not passing blksize to prevent issue in case the block size alignment changes during runtime.
+
+        cl->downloadBlockSize[curindex] = FS_Read(cl->downloadBlocks[curindex], blksize, cl->download);
+
+        if (cl->downloadBlockSize[curindex] < 0)
+        {
+            // EOF
+            cl->downloadCount = cl->downloadSize;
+            break;
+        }
+
+        cl->downloadCount += cl->downloadBlockSize[curindex];
+        // Load in next block
+        cl->downloadCurrentBlock++;
+    }
+
+    // Check to see if we have eof condition and add the EOF block
+    if (cl->downloadCount == cl->downloadSize && !cl->downloadEOF && cl->downloadCurrentBlock - cl->downloadClientBlock < MAX_DOWNLOAD_WINDOW)
+    {
+        cl->downloadBlockSize[cl->downloadCurrentBlock % MAX_DOWNLOAD_WINDOW] = 0;
+        cl->downloadCurrentBlock++;
+        cl->downloadEOF = qtrue;
+    }
+
+    if(cl->downloadClientBlock == cl->downloadCurrentBlock)
+        return; // Nothing to transmit
+
+    if (cl->downloadXmitBlock == cl->downloadCurrentBlock)
+    {
+        // See https://github.com/id-Software/Quake-III-Arena/blob/dbe4ddb10315479fc00086f08e25d968b4b43c49/code/server/sv_client.c#L889
+        if(svs.time - cl->downloadSendTime > 1000)
+            cl->downloadXmitBlock = cl->downloadClientBlock;
+        else
+            return;
+    }
+
+    // Send current block
+    curindex = (cl->downloadXmitBlock % MAX_DOWNLOAD_WINDOW);
+
+    MSG_WriteByte(msg, svc_download);
+    MSG_WriteShort(msg, cl->downloadXmitBlock);
+    // Block zero contains file size
+    if(cl->downloadXmitBlock == 0)
+        MSG_WriteLong(msg, cl->downloadSize);
+    MSG_WriteShort(msg, cl->downloadBlockSize[curindex]);
+
+    // Write the block
+    if(cl->downloadBlockSize[curindex])
+        MSG_WriteData(msg, cl->downloadBlocks[curindex], cl->downloadBlockSize[curindex]);
+
+    Com_DPrintf("clientDownload: %d : writing block %d\n", cl - svs.clients, cl->downloadXmitBlock);
+
+    // Move on to the next block
+    // It will get sent with next snapshot
+    cl->downloadXmitBlock++;
+    cl->downloadSendTime = svs.time;
 }
 
 void custom_SV_ExecuteClientMessage(client_t *cl, msg_t *msg)
@@ -1148,6 +1657,7 @@ char *custom_va(const char *format, ...)
 
 void custom_SV_BotUserMove(client_t *client)
 {
+    
     int num;
     usercmd_t ucmd = {0};
 
@@ -1181,6 +1691,7 @@ void custom_SV_BotUserMove(client_t *client)
 
     client->deltaMessage = client->netchan.outgoingSequence - 1;
     SV_ClientThink(client, &ucmd);
+
 }
 
 void custom_SV_ClientThink(int clientNum)
@@ -1212,71 +1723,6 @@ void custom_SV_ClientThink(int clientNum)
 		customPlayerState[clientNum].frameTime = Sys_Milliseconds64();
 		customPlayerState[clientNum].frames = 0;
 	}
-/*
-	if ( ucmd->buttons & KEY_MASK_FIRE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_FIRE) )
-	{
-		if ( codecallback_attackbutton )
-		{
-			short ret = Scr_ExecEntThread(cl->gentity, codecallback_attackbutton, 0);
-			Scr_FreeThread(ret);
-		}
-	}
-	
-	if ( ucmd->buttons & KEY_MASK_MELEE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_MELEE) )
-	{
-		if ( codecallback_meleebutton )
-		{
-			short ret = Scr_ExecEntThread(cl->gentity, codecallback_meleebutton, 0);
-			Scr_FreeThread(ret);
-		}
-	}
-
-	if ( ucmd->buttons & KEY_MASK_RELOAD && !(customPlayerState[clientNum].previousButtons & KEY_MASK_RELOAD) )
-	{
-		if ( codecallback_reloadbutton )
-		{
-			short ret = Scr_ExecEntThread(cl->gentity, codecallback_reloadbutton, 0);
-			Scr_FreeThread(ret);
-		}
-	}
-	
-	if ( ucmd->buttons & KEY_MASK_PRONE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_PRONE) )
-	{
-		if ( codecallback_pronebutton )
-		{
-			short ret = Scr_ExecEntThread(cl->gentity, codecallback_pronebutton, 0);
-			Scr_FreeThread(ret);
-		}
-	}
-	
-	if ( ucmd->buttons & KEY_MASK_CROUCH && !(customPlayerState[clientNum].previousButtons & KEY_MASK_CROUCH) )
-	{
-		if ( codecallback_crouchbutton )
-		{
-			short ret = Scr_ExecEntThread(cl->gentity, codecallback_crouchbutton, 0);
-			Scr_FreeThread(ret);
-		}
-	}
-	
-	if ( ucmd->buttons & KEY_MASK_JUMP && !(customPlayerState[clientNum].previousButtons & KEY_MASK_JUMP) )
-	{
-		if ( codecallback_standbutton )
-		{
-			short ret = Scr_ExecEntThread(cl->gentity, codecallback_standbutton, 0);
-			Scr_FreeThread(ret);
-		}
-	}
-	
-	if ( ucmd->buttons & KEY_MASK_ADS_MODE && !(customPlayerState[clientNum].previousButtons & KEY_MASK_ADS_MODE) )
-	{
-		if ( codecallback_adsbutton )
-		{
-			short ret = Scr_ExecEntThread(cl->gentity, codecallback_adsbutton, 0);
-			Scr_FreeThread(ret);
-		}
-	}
-	customPlayerState[clientNum].previousButtons = ucmd->buttons;
-*/
 }
 
 int custom_ClientEndFrame(gentity_t *ent)
@@ -1345,6 +1791,45 @@ void custom_PM_AirMove(pmove_t *pm, int *a2)
     *(int*)&PM_AirMove = hook_pm_airmove->from;
     PM_AirMove(pm, a2);
     hook_pm_airmove->hook();
+}
+
+void PM_ProjectVelocity(const float *velIn, const float *normal, float *velOut)
+{
+    float lengthSq2D;
+    float adjusted;
+    float newZ;
+    float lengthScale;
+    
+    lengthSq2D = (float)(velIn[0] * velIn[0]) + (float)(velIn[1] * velIn[1]);
+    if (fabs(normal[2]) < 0.001 || lengthSq2D == 0.0)
+    {
+        velOut[0] = velIn[0];
+        velOut[1] = velIn[1];
+        velOut[2] = velIn[2];
+    }
+    else
+    {
+        newZ = (float)-(float)((float)(velIn[0] * normal[0]) + (float)(velIn[1] * normal[1])) / normal[2];
+        adjusted = velIn[1];
+        lengthScale = sqrt((float)((float)(velIn[2] * velIn[2]) + lengthSq2D) / (float)((float)(newZ * newZ) + lengthSq2D));
+        if (lengthScale < 1.0 || newZ < 0.0 || velIn[2] > 0.0)
+        {
+            velOut[0] = lengthScale * velIn[0];
+            velOut[1] = lengthScale * adjusted;
+            velOut[2] = lengthScale * newZ;
+        }
+    }
+}
+
+
+
+
+void hook_PM_ClipVelocity_bounce(const float *in, const float *normal, float *out, float overbounce)
+{
+    if(jump_bounceEnable->integer)
+        PM_ProjectVelocity(in, normal, out);
+    else
+        PM_ClipVelocity(in, normal, out, overbounce);
 }
 
 
@@ -1596,7 +2081,7 @@ void hook_SV_DirectConnect(netadr_t from)
             int remaining_seconds = std::get<1>(banInfo) - elapsed_seconds;
             if (remaining_seconds <= 0)
             {
-                Cbuf_ExecuteText(EXEC_APPEND, custom_va("unban %s\n", ip));
+                Cbuf_ExecuteText(EXEC_APPEND, va("unban %s\n", ip));
                 unbanned = true;
             }
             else
@@ -1813,7 +2298,7 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     pm = (pmove_t*)dlsym(ret, "pm");
     scr_const = (stringIndex_t*)dlsym(ret, "scr_const");
 
-
+    AxisToAngles = (AxisToAngles_t)dlsym(ret, "AxisToAngles");
     Scr_GetFunctionHandle = (Scr_GetFunctionHandle_t)dlsym(ret, "Scr_GetFunctionHandle");
     Scr_GetNumParam = (Scr_GetNumParam_t)dlsym(ret, "Scr_GetNumParam");
     trap_Argv = (trap_Argv_t)dlsym(ret, "trap_Argv");
@@ -1834,12 +2319,15 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     Scr_ParamError = (Scr_ParamError_t)dlsym(ret, "Scr_ParamError");
     G_Say = (G_Say_t)dlsym(ret, "G_Say");
     G_RegisterCvars = (G_RegisterCvars_t)dlsym(ret, "G_RegisterCvars");
+    G_AddPredictableEvent = (G_AddPredictableEvent_t)dlsym(ret, "G_AddPredictableEvent");
+    G_TempEntity = (G_TempEntity_t)dlsym(ret, "G_TempEntity");
     trap_GetConfigstringConst = (trap_GetConfigstringConst_t)dlsym(ret, "trap_GetConfigstringConst");
     trap_GetConfigstring = (trap_GetConfigstring_t)dlsym(ret, "trap_GetConfigstring");
     BG_GetNumWeapons = (BG_GetNumWeapons_t)dlsym(ret, "BG_GetNumWeapons");
     BG_GetInfoForWeapon = (BG_GetInfoForWeapon_t)dlsym(ret, "BG_GetInfoForWeapon");
     BG_GetWeaponIndexForName = (BG_GetWeaponIndexForName_t)dlsym(ret, "BG_GetWeaponIndexForName");
     BG_AnimationIndexForString = (BG_AnimationIndexForString_t)dlsym(ret, "BG_AnimationIndexForString");
+    BG_AnimScriptEvent = (BG_AnimScriptEvent_t)dlsym(ret, "BG_AnimScriptEvent");
     Scr_IsSystemActive = (Scr_IsSystemActive_t)dlsym(ret, "Scr_IsSystemActive");
     Scr_GetInt = (Scr_GetInt_t)dlsym(ret, "Scr_GetInt");
     Scr_GetString = (Scr_GetString_t)dlsym(ret, "Scr_GetString");
@@ -1855,6 +2343,9 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     Scr_AddArray = (Scr_AddArray_t)dlsym(ret, "Scr_AddArray");
     Scr_AddObject = (Scr_AddObject_t)dlsym(ret, "Scr_AddObject");
     Scr_LoadScript = (Scr_LoadScript_t)dlsym(ret, "Scr_LoadScript");
+    Scr_AddIString = (Scr_AddIString_t)dlsym(ret, "Scr_AddIString");
+    Scr_GetIString = (Scr_GetIString_t)dlsym(ret, "Scr_GetIString");
+    Scr_ConstructMessageString = (Scr_ConstructMessageString_t)dlsym(ret, "Scr_ConstructMessageString");
     StuckInClient = (StuckInClient_t)dlsym(ret, "StuckInClient");
     Q_strlwr = (Q_strlwr_t)dlsym(ret, "Q_strlwr");
     Q_strupr = (Q_strupr_t)dlsym(ret, "Q_strupr");
@@ -1862,8 +2353,14 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     Q_strncpyz = (Q_strncpyz_t)dlsym(ret, "Q_strncpyz");
     Q_CleanStr = (Q_CleanStr_t)dlsym(ret, "Q_CleanStr");
     Jump_Check = (Jump_Check_t)((int)dlsym(ret, "_init") + 0x76F4);
+    va = (va_t)dlsym(ret, "va");
+    _VectorLength = (_VectorLength_t)dlsym(ret, "_VectorLength");
+    vectoangles = (vectoangles_t)dlsym(ret, "vectoangles");
+    PM_ClipVelocity = (PM_ClipVelocity_t)dlsym(ret, "PM_ClipVelocity");
+    LookAtKiller = (LookAtKiller_t)dlsym(ret, "LookAtKiller");
 
 
+    printf("========Initializing VCODLIB========");
 
 
     hook_call((int)dlsym(ret, "vmMain") + 0xB0, (int)hook_ClientCommand);
@@ -1872,6 +2369,7 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
 
 
     hook_jmp((int)dlsym(ret, "G_LocalizedStringIndex"), (int)custom_G_LocalizedStringIndex);
+    hook_jmp((int)dlsym(ret, "va"), (int)custom_va);
 
     //1.1 Jump_Height Cvar -- Raphael
     hook_jmp((int)dlsym(ret, "BG_PlayerTouchesItem") + 0x88C, (int)hook_Jump_Check_Naked);
@@ -1879,7 +2377,7 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     hook_jmp((int)dlsym(ret, "BG_PlayerTouchesItem") + 0x899, (int)hook_Jump_Check_Naked_2);
     resume_addr_Jump_Check_2 = (uintptr_t)dlsym(ret, "BG_PlayerTouchesItem") + 0x8A4;
 
-
+    hook_call((int)dlsym(ret, "_init") + 0xDF22, (int)hook_PM_ClipVelocity_bounce);
 
     // Patch codmsgboom
     /* See:
@@ -1911,8 +2409,12 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     hook_pm_airmove->hook();
     hook_pm_crashland = new cHook((int)dlsym(ret, "_init") + 0x88C4, (int)custom_PM_CrashLand);
     hook_pm_crashland->hook();
-
-
+    hook_DeathmatchScoreboardMessage = new cHook((int)dlsym(ret, "DeathmatchScoreboardMessage"), (int)custom_DeathmatchScoreboardMessage);
+    hook_DeathmatchScoreboardMessage->hook();
+    
+//    hook_PmoveSingle = new cHook((int)dlsym(ret, "PmoveSingle"), (int)custom_PmoveSingle);
+//    hook_PmoveSingle->hook();
+    
     return ret;
 }
 
@@ -1947,6 +2449,9 @@ public:
         hook_call(0x0808c74e, (int)hook_SVC_Info);
         hook_call(0x0808c71c, (int)hook_SVC_Status);
         hook_call(0x0808c81d, (int)hook_SVC_RemoteCommand);
+        hook_jmp(0x0809045c, (int)custom_SV_SendClientMessages);
+        hook_jmp(0x08086290, (int)custom_SV_WriteDownloadToClient);
+        hook_jmp(0x0808f680, (int)custom_SV_SendMessageToClient);
 
         hook_jmp(0x080717a4, (int)custom_FS_ReferencedPakChecksums);
         hook_jmp(0x080716cc, (int)custom_FS_ReferencedPakNames);

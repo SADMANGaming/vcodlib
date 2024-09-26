@@ -10,10 +10,11 @@
 #define qfalse 0
 
 
-
 // 3D vectors
 #define VectorCopy( a, b )          ( ( b )[0] = ( a )[0],( b )[1] = ( a )[1],( b )[2] = ( a )[2] )
 #define VectorScale( v, s, o )      ( ( o )[0] = ( v )[0] * ( s ),( o )[1] = ( v )[1] * ( s ),( o )[2] = ( v )[2] * ( s ) )
+#define VectorCross( a, b, c )      ( ( c )[0] = ( a )[1] * ( b )[2] - ( a )[2] * ( b )[1],( c )[1] = ( a )[2] * ( b )[0] - ( a )[0] * ( b )[2],( c )[2] = ( a )[0] * ( b )[1] - ( a )[1] * ( b )[0] )
+
 
 #define BIG_INFO_STRING             0x2000
 #define GENTITYNUM_BITS             10
@@ -71,6 +72,13 @@
 #define PMF_CROUCH      0x2
 #define PMF_LADDER      0x10
 #define PMF_SLIDING     0x100
+
+
+#define PACKET_MASK (PACKET_BACKUP - 1)
+#define HEADER_RATE_BYTES 48
+#define MAX_BPS_WINDOW              20
+#define MAX_MASTER_SERVERS          5
+#define MAX_DOWNLOAD_BLKSIZE_FAST   0x2000
 
 
 /*
@@ -661,6 +669,30 @@ typedef enum
 
 typedef enum
 {
+    ANIM_ET_PAIN,
+    ANIM_ET_DEATH,
+    ANIM_ET_FIREWEAPON,
+    UNKNOWN,                    // Does nothing
+    UNKNOWN_2,                  // Does nothing
+    ANIM_ET_LAND,       
+    ANIM_ET_DROPWEAPON,         // Change weapon
+    UNKNOWN_3,                  // Does nothing
+    UNKNOWN_4,                  // Does nothing
+    UNKNOWN_5,                  // Does nothing
+    ANIM_ET_RELOAD, // 10
+    UNKNOWN_6,                  // Does nothing
+    UNKNOWN_7,                  // Does nothing
+    ANIM_ET_MELEEATTACK,
+    ANIM_ET_CROUCH_TO_STAND,    // CRASH
+    UNKNOWN_8,
+    UNKNOWN_9,
+    UNKNOWN_10,
+    ANIM_ET_SHELLSHOCK,         // CRASH
+    NUM_ANIM_EVENTTYPES         // CRASH
+} scriptAnimEventTypes_t;
+
+typedef enum
+{
     PM_NORMAL = 0x0,
     PM_NORMAL_LINKED = 0x1,
     PM_NOCLIP = 0x2,
@@ -758,6 +790,7 @@ struct gclient_s
     int spectatorClient;
     qboolean noclip;
     qboolean ufo;
+    byte pad2[228];
     //...
 };
 
@@ -766,7 +799,7 @@ struct gentity_s
   entityState_t s;
   entityShared_t r;
   byte pad[4];
-  struct gclient_s *client;
+  gclient_t *client;
   byte pad2[440];
 };
 
@@ -841,8 +874,15 @@ typedef struct
 
 typedef struct
 {
-    struct gclient_s *clients;
-    byte pad[0x1DC];
+    gclient_t *clients;
+    gentity_t *gentities;
+    int gentitySize;
+    int num_entities;
+    gentity_t *firstFreeEnt;
+    gentity_t *lastFreeEnt;
+    fileHandle_t logFile;
+    int initializing;
+    byte pad[0x1C0];
     int maxclients;
     int framenum;
     int time;
@@ -855,6 +895,7 @@ typedef struct
     int manualNameChange;
     int numConnectedClients;
     int sortedClients[MAX_CLIENTS];
+    char voteString[1024];
     // ...
 } level_locals_t;
 
@@ -873,7 +914,16 @@ typedef struct
     byte pad[0x6141C];
     playerState_t *gameClients;
     int gameClientSize;
-    // ...
+    int	skelTimeStamp;
+    int	bpsWindow[MAX_BPS_WINDOW];
+    int	bpsWindowSteps;
+    int	bpsTotalBytes;
+    int	bpsMaxBytes;
+    int	ubpsWindow[MAX_BPS_WINDOW];
+    int	ubpsTotalBytes;
+    int	ubpsMaxBytes;
+    float ucompAve;
+    int	ucompNum;
 } server_t;
 
 enum clc_ops_e
@@ -944,7 +994,7 @@ typedef struct
 
 
 extern gentity_t *g_entities;
-extern gclient_t *g_clients;
+//extern gclient_t *g_clients;
 extern stringIndex_t *scr_const;
 
 static const int com_frameTime_offset = 0x0833df1c;
@@ -972,6 +1022,7 @@ static_assert((sizeof(client_t) == 370940), "ERROR: client_t size is invalid!");
 static_assert((sizeof(playerState_t) == 8400), "ERROR: playerState_t size is invalid!");
 static_assert((sizeof(entityShared_t) == 100), "ERROR: entityShared_t size is invalid!");
 static_assert((sizeof(gentity_t) == 788), "ERROR: gentity_t size is invalid!");
+static_assert((sizeof(gclient_t) == 8900), "ERROR: gclient_t size is invalid!");
 
 #endif
 
@@ -1012,3 +1063,32 @@ typedef struct callback_s
     int *pos;
     const char *name;
 } callback_t;
+
+typedef enum
+{
+	VAR_UNDEFINED,
+	VAR_OBJECT,
+	VAR_STRING,
+	VAR_ISTRING,
+	VAR_VECTOR,
+	VAR_FLOAT,
+	VAR_INTEGER,
+	VAR_CODEPOS,
+	VAR_PRECODEPOS,
+	VAR_FUNCTION,
+	VAR_STACK,
+	VAR_ANIMATION,
+	VAR_DEVELOPER_CODEPOS,
+	VAR_INCLUDE_CODEPOS,
+	VAR_THREAD_LIST,
+	VAR_THREAD,
+	VAR_NOTIFY_THREAD,
+	VAR_TIME_THREAD,
+	VAR_CHILD_THREAD,
+	VAR_STRUCT,
+	VAR_REMOVED_ENTITY,
+	VAR_ENTITY,
+	VAR_ARRAY,
+	VAR_REMOVED_THREAD,
+	VAR_COUNT
+} var_type_t;

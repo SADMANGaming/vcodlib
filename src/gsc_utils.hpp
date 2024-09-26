@@ -25,6 +25,10 @@ void gsc_utils_makelocalizedstring();
 void gsc_utils_ban();
 void gsc_utils_unban();
 
+void gsc_utils_stringtoistring();
+void gsc_utils_istringtostring();
+
+
 #if COMPILE_LIBCURL == 1
 void gsc_utils_webhookmessage();
 #endif

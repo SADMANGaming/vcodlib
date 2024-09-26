@@ -33,6 +33,9 @@ scr_function_t scriptFunctions[] =
     {"makeLocalizedString", gsc_utils_makelocalizedstring, 0},
     {"ban", gsc_utils_ban, 0},
     {"unban", gsc_utils_unban, 0},
+    {"StringToIString", gsc_utils_stringtoistring, 0},
+    {"IStringToString", gsc_utils_istringtostring, 0},
+
 
     // Weapons
     {"setWeaponCookable", gsc_weapons_setweaponcookable, 0},
@@ -109,7 +112,7 @@ scr_method_t scriptMethods[] =
     {"setSpeed", gsc_player_setspeed, 0},
     {"setJumpHeight", gsc_player_setjumpheight, 0},
     {"setAirJumps", gsc_player_setairjumps, 0},
-//	{"setStance", gsc_player_setstance, 0},
+	{"setStance", gsc_player_setstance, 0},
     {"getFps", gsc_player_getfps, 0},
     {"isOnLadder", gsc_player_isonladder, 0},
     {"setUfo", gsc_player_setufo, 0},
@@ -117,6 +120,10 @@ scr_method_t scriptMethods[] =
 	{"setGravity", gsc_player_setgravity, 0},
 	{"getLastConnectTime", gsc_player_getlastconnecttime, 0},
 	{"isBot", gsc_player_isbot, 0},
+    {"playScriptAnimation", gsc_player_playscriptanimation, 0},
+//    {"playFxForPlayer", gsc_player_playfxforplayer, 0},
+    {"LookAtKiller", gsc_player_lookatkiller, 0},
+
 
 #if COMPILE_SQLITE == 1
     {"async_sqlite_create_entity_query", gsc_async_sqlite_create_entity_query, 0},

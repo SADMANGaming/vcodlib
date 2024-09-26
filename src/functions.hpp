@@ -3,12 +3,36 @@
 
 //
 typedef gentity_t * (*SV_ClientThink_t)(client_t *cl, usercmd_t *cmd);
-static const SV_ClientThink_t SV_ClientThink = (SV_ClientThink_t)0x00077c7c;
+static const SV_ClientThink_t SV_ClientThink = (SV_ClientThink_t)0x0808789c;
 
 typedef void (*G_AddEvent_t)(gentity_t *ent, int event, int eventParm);
 
 typedef void (*G_AddPredictableEvent_t)(gentity_t *ent, int event, int eventParm);
-//0x00024010
+extern G_AddPredictableEvent_t G_AddPredictableEvent;
+
+typedef void (*Scr_AddIString_t)(const char *string);
+extern Scr_AddIString_t Scr_AddIString;
+
+typedef void (*Scr_GetIString_t)(const char *istring);
+extern Scr_GetIString_t Scr_GetIString;
+
+typedef void(*Scr_ConstructMessageString_t)(unsigned int firstParmIndex, unsigned int lastParmIndex, const char *errorContext, char *string, unsigned int stringLimit);
+extern Scr_ConstructMessageString_t Scr_ConstructMessageString;
+
+typedef gentity_t * (*G_TempEntity_t)(vec3_t origin, int event);
+extern G_TempEntity_t G_TempEntity;
+
+typedef void (*AxisToAngles_t)(float *axis, float *angles);
+extern AxisToAngles_t AxisToAngles;
+
+typedef double (*_VectorLength_t)(float *vec);
+extern _VectorLength_t _VectorLength;
+
+typedef void (*vectoangles_t)(vec3_t value1, vec3_t angles);
+extern vectoangles_t vectoangles;
+
+typedef void (*LookAtKiller_t)(gentity_t *self, gentity_t *inflictor, gentity_t *attacker);
+extern LookAtKiller_t LookAtKiller;
 
 
 
@@ -78,8 +102,8 @@ static const FS_Read_t FS_Read = (FS_Read_t)0x080628f4;
 typedef long (*FS_SV_FOpenFileRead_t)(const char *filename, fileHandle_t *fp);
 static const FS_SV_FOpenFileRead_t FS_SV_FOpenFileRead = (FS_SV_FOpenFileRead_t)0x0806ffb8;
 
-typedef int (*FS_idPak_t)(const char *a1, const char *a2);
-static const FS_idPak_t FS_idPak = (FS_idPak_t)0x080709c0;
+typedef int (*FS_iwPak_t)(char *pak, const char *base);
+static const FS_iwPak_t FS_iwPak = (FS_iwPak_t)0x080709c0;
 
 typedef int (*FS_ReadFile_t)(const char* qpath, void** buffer);
 static const FS_ReadFile_t FS_ReadFile = (FS_ReadFile_t)0x0805e9dc;
@@ -115,8 +139,7 @@ static const Cvar_VariableString_t Cvar_VariableString = (Cvar_VariableString_t)
 //
 
 // SV
-//typedef void (*SV_BotUserMove_t)(int clientNum);
-//static SV_BotUserMove_t SV_BotUserMove = (SV_BotUserMove_t)0x0808cccc;
+
 
 typedef void (*SV_ClientEnterWorld_t)(client_t *cl, usercmd_t *cmd);
 static const SV_ClientEnterWorld_t SV_ClientEnterWorld = (SV_ClientEnterWorld_t)0x080877d8;
@@ -186,6 +209,12 @@ static const SV_ExecuteClientCommand_t SV_ExecuteClientCommand = (SV_ExecuteClie
 
 typedef void (*SV_Netchan_AddOOBProfilePacket_t)(int iLength);
 static const SV_Netchan_AddOOBProfilePacket_t SV_Netchan_AddOOBProfilePacket = (SV_Netchan_AddOOBProfilePacket_t)0x0808dd10;
+
+typedef void (*SV_Netchan_TransmitNextFragment_t)(netchan_t *chan);
+static const SV_Netchan_TransmitNextFragment_t SV_Netchan_TransmitNextFragment = (SV_Netchan_TransmitNextFragment_t)0x0808dcf8;
+
+typedef qboolean (*SV_Netchan_Transmit_t)(client_t *client, byte *data, int length);
+static const SV_Netchan_Transmit_t SV_Netchan_Transmit = (SV_Netchan_Transmit_t)0x0808dc74;
 //
 
 // Info
@@ -256,9 +285,12 @@ static const MSG_ReadLong_t MSG_ReadLong = (MSG_ReadLong_t)0x0807f2f0;
 
 typedef char * (*MSG_ReadStringLine_t)(msg_t *msg);
 static const MSG_ReadStringLine_t MSG_ReadStringLine = (MSG_ReadStringLine_t)0x0807f3fc;
+
+typedef int (*MSG_WriteBitsCompress_t)(const byte *datasrc, byte *buffdest, int bytecount);
+static const MSG_WriteBitsCompress_t MSG_WriteBitsCompress = (MSG_WriteBitsCompress_t)0x0807f03c;
 //
 
-// Weapon
+// BG
 typedef int (*BG_GetNumWeapons_t)(void);
 extern BG_GetNumWeapons_t BG_GetNumWeapons;
 
@@ -267,6 +299,9 @@ extern BG_GetInfoForWeapon_t BG_GetInfoForWeapon;
 
 typedef int (*BG_GetWeaponIndexForName_t)(const char *name);
 extern BG_GetWeaponIndexForName_t BG_GetWeaponIndexForName;
+
+typedef int (*BG_AnimScriptEvent_t)(playerState_t *ps, scriptAnimEventTypes_t event, int isContinue, int force);
+extern BG_AnimScriptEvent_t BG_AnimScriptEvent;
 //
 
 // Anim
@@ -367,6 +402,7 @@ typedef void (*Q_strcat_t)(char *dest, int size, const char *src);
 typedef void (*Q_strncpyz_t)(char *dest, const char *src, int destsize);
 
 typedef void (*Q_CleanStr_t)(char *string);
+extern Q_CleanStr_t Q_CleanStr;
 
 typedef int (*Q_strncmp_t)(const char *s1, const char *s2, int n);
 static const Q_strncmp_t Q_strncmp = (Q_strncmp_t)0x0808315c;
@@ -406,5 +442,12 @@ typedef void (*Huff_Decompress_t)(msg_t *mbuf, int offset);
 static const Huff_Decompress_t Huff_Decompress = (Huff_Decompress_t)0x08071f7c;
 
 typedef int (*Jump_Check_t)();
+
+typedef int (*PM_GetEffectiveStance_t)(playerState_t *ps);
+
+typedef void (*PM_ClipVelocity_t)(const float *in, const float *normal, float *out, float overbounce);
+
+typedef char * (*va_t)(const char *format, ...);
+extern va_t va;
 
 #endif

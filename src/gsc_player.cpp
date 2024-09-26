@@ -2,6 +2,7 @@
 
 extern customPlayerState_t customPlayerState[MAX_CLIENTS];
 
+
 void gsc_player_setvelocity(scr_entref_t ref)
 {
     int id = ref.entnum;
@@ -602,7 +603,7 @@ void gsc_player_setairjumps(scr_entref_t ref)
     stackPushBool(qtrue);
 }
 
-/*
+
 void gsc_player_setstance(scr_entref_t ref)
 {
 	int id = ref.entnum;
@@ -644,4 +645,168 @@ void gsc_player_setstance(scr_entref_t ref)
 
 	stackPushBool(qtrue);
 }
+
+void gsc_player_playscriptanimation(scr_entref_t ref)
+{
+    int id = ref.entnum;
+    int scriptAnimEventType;
+    int isContinue;
+    int force;
+    if ( !stackGetParams("iii", &scriptAnimEventType, &isContinue, &force) )
+    {
+        stackError("gsc_player_playscriptanimation() argument is undefined or has a wrong type");
+        stackPushUndefined();
+        return;
+    }
+    if ( id >= MAX_CLIENTS )
+    {
+        stackError("gsc_player_playscriptanimation() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+    if ( scriptAnimEventType < 0 || scriptAnimEventType >= NUM_ANIM_EVENTTYPES )
+    {
+        stackError("gsc_player_playscriptanimation() argument is not a valid scriptAnimEventType");
+        stackPushUndefined();
+        return;
+    }
+    
+    gentity_t *entity = &g_entities[id];
+    stackPushInt(BG_AnimScriptEvent(&entity->client->ps, (scriptAnimEventTypes_t)scriptAnimEventType, isContinue, force));
+}
+/*
+void gsc_player_playfxforplayer(scr_entref_t ref)
+{
+	int id = ref.entnum;
+	int args;
+	qboolean error;
+	int index;
+	vec3_t origin;
+	vec3_t forward_vec;
+	vec3_t up_vec;
+	vec3_t cross;
+	double length;
+
+	args = Scr_GetNumParam();
+	error = qfalse;
+	switch ( args )
+	{
+		case 2:
+			if ( ! stackGetParams("iv", &index, &origin) )
+				error = qtrue;
+			break;
+		case 3:
+			if ( ! stackGetParams("ivv", &index, &origin, &forward_vec) )
+				error = qtrue;
+			break;
+		case 4:
+			if ( ! stackGetParams("ivvv", &index, &origin, &forward_vec, &up_vec) )
+				error = qtrue;
+			break;
+		default:
+			stackError("gsc_utils_playfxforplayer() incorrect number of parameters");
+			stackPushUndefined();
+			return;
+	}
+
+	if ( error )
+	{
+		stackError("gsc_utils_playfxforplayer() one or more arguments is undefined or has a wrong type");
+		stackPushUndefined();
+		return;
+	}
+	
+	if ( id >= MAX_CLIENTS )
+	{
+		stackError("gsc_utils_playfxforplayer() entity %i is not a player", id);
+		stackPushUndefined();
+		return;
+	}
+
+	gentity_t *ent = G_TempEntity(origin, EV_PLAY_FX);
+	ent->s.eventParm = index & 0xff;
+	ent->s.otherEntityNum = id + 1;
+	if ( args == 2 )
+	{
+		ent->s.apos.trBase[0] = -90.0;
+	}
+	else
+	{
+		length = _VectorLength(forward_vec);
+		if ( length == 0.0 )
+		{
+			Scr_Error("playFx called with (0 0 0) forward direction " + index); 
+		}
+		VectorScale(forward_vec, 1.0 / length, forward_vec);
+
+		if ( args == 3 )
+		{
+			vectoangles(forward_vec, ent->s.apos.trBase);
+		}
+		else
+		{
+			length = _VectorLength(up_vec);
+			if ( length == 0.0 )
+			{
+				Scr_Error("playFx called with (0 0 0) up direction " + index);
+			}
+			VectorScale(up_vec, 1.0 / length, up_vec);
+			VectorCross(up_vec, forward_vec, cross);
+
+			length = _VectorLength(cross);
+			if ( length < 0.001 )
+			{
+				Scr_Error("playFx called an up direction 0 or 180 degrees from forward " + index);
+			}
+			else if ( length < 0.999 )
+			{
+				VectorScale(cross, 1.0 / length, cross);
+				VectorCross(forward_vec, cross, up_vec);
+			}
+			AxisToAngles(forward_vec, ent->s.apos.trBase);
+		}
+	}
+
+	stackPushBool(qtrue);
+}
 */
+void gsc_player_lookatkiller(scr_entref_t ref)
+{
+	int id = ref.entnum;
+	int inflictor, attacker;
+
+	if ( !stackGetParams("ii", &inflictor, &attacker) )
+	{
+		stackError("gsc_player_lookatkiller() one or more arguments is undefined or has a wrong type");
+		stackPushUndefined();
+		return;
+	}
+
+	gentity_t *self_entity = Scr_GetEntity(id);
+	if ( !self_entity )
+	{
+		stackError("gsc_player_lookatkiller() self_entity state is invalid");
+		stackPushUndefined();
+		return;
+	}
+
+	gentity_t *inflictor_entity = Scr_GetEntity(inflictor);
+	if ( !inflictor_entity )
+	{
+		stackError("gsc_player_lookatkiller() inflictor_entity state is invalid");
+		stackPushUndefined();
+		return;
+	}
+
+	gentity_t *attacker_entity = Scr_GetEntity(attacker);
+	if ( !attacker_entity )
+	{
+		stackError("gsc_player_lookatkiller() attacker_entity state is invalid");
+		stackPushUndefined();
+		return;
+	}
+
+	LookAtKiller(self_entity, inflictor_entity, attacker_entity);
+
+	stackPushBool(qtrue);
+}

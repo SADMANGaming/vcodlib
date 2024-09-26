@@ -84,7 +84,7 @@ xfunction_t Scr_GetCustomFunction(const char **fname, qboolean *fdev);
 xmethod_t Scr_GetCustomMethod(const char **fname, qboolean *fdev);
 
 uint64_t Sys_Milliseconds64(void);
-char *custom_va(const char *format, ...);
+//char *custom_va(const char *format, ...);
 
 
 // For tests
