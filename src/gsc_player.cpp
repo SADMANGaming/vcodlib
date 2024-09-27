@@ -810,3 +810,27 @@ void gsc_player_lookatkiller(scr_entref_t ref)
 
 	stackPushBool(qtrue);
 }
+void gsc_player_sethiddenfromscoreboard(scr_entref_t ref)
+{
+    int id = ref.entnum;
+    if (id >= MAX_CLIENTS)
+    {
+        stackError("gsc_player_sethiddenfromscoreboard() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+    bool hidden = Scr_GetInt(0);
+    customPlayerState[id].hiddenFromScoreboard = hidden;
+    stackPushBool(true);
+}
+void gsc_player_ishiddenfromscoreboard(scr_entref_t ref)
+{
+    int id = ref.entnum;
+    if (id >= MAX_CLIENTS)
+    {
+        stackError("gsc_player_ishiddenfromscoreboard() entity %i is not a player", id);
+        stackPushUndefined();
+        return;
+    }
+    stackPushBool(customPlayerState[id].hiddenFromScoreboard);
+}

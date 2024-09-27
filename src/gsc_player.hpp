@@ -41,6 +41,7 @@ void gsc_player_isbot(scr_entref_t ref);
 void gsc_player_getlastconnecttime(scr_entref_t ref);
 //void gsc_player_playfxforplayer(scr_entref_t ref);
 void gsc_player_lookatkiller(scr_entref_t ref);
-
+void gsc_player_sethiddenfromscoreboard(scr_entref_t ref);
+void gsc_player_ishiddenfromscoreboard(scr_entref_t ref);
 
 #endif

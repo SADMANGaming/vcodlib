@@ -123,7 +123,8 @@ scr_method_t scriptMethods[] =
     {"playScriptAnimation", gsc_player_playscriptanimation, 0},
 //    {"playFxForPlayer", gsc_player_playfxforplayer, 0},
     {"LookAtKiller", gsc_player_lookatkiller, 0},
-
+    {"setHiddenFromScoreboard", gsc_player_sethiddenfromscoreboard, 0},
+    {"isHiddenFromScoreboard", gsc_player_ishiddenfromscoreboard, 0},
 
 #if COMPILE_SQLITE == 1
     {"async_sqlite_create_entity_query", gsc_async_sqlite_create_entity_query, 0},

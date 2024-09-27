@@ -1056,6 +1056,7 @@ typedef struct customPlayerState_s
     char botUpMove;
     int airJumpsAvailable;
     qboolean overrideJumpHeight_air;
+    bool hiddenFromScoreboard;
 } customPlayerState_t;
 
 typedef struct callback_s

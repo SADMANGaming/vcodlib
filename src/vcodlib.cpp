@@ -662,9 +662,11 @@ void custom_DeathmatchScoreboardMessage(gentity_t *ent)
     int stringlength;
     char string[1400];
     char entry[1024];
+    int visiblePlayers;
 
     string[0] = 0;
     stringlength = 0;
+    visiblePlayers = 0;
 
     numSorted = level->numConnectedClients;
 
@@ -675,6 +677,9 @@ void custom_DeathmatchScoreboardMessage(gentity_t *ent)
     {
         clientNum = level->sortedClients[i];
         client = &level->clients[clientNum];
+
+        if(customPlayerState[clientNum].hiddenFromScoreboard)
+        continue;
         
         if (client->sess.connected == CON_CONNECTING)
         {
@@ -710,9 +715,10 @@ void custom_DeathmatchScoreboardMessage(gentity_t *ent)
 
         strcpy(&string[stringlength], entry);
         stringlength += len;
+        visiblePlayers++;
     }
     
-    trap_SendServerCommand(ent - g_entities, SV_CMD_RELIABLE, va("b %i %i %i%s", i, level->teamScores[1], level->teamScores[2], string));
+    trap_SendServerCommand(ent - g_entities, SV_CMD_RELIABLE, va("b %i %i %i%s", visiblePlayers, level->teamScores[1], level->teamScores[2], string));
 }
 
 void custom_SV_SpawnServer(char *server)
