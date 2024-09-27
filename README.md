@@ -1,4 +1,4 @@
-# VCODLIB 1.1
+# VCODLIB 1.1 (libcod1 fork)
 ### Adding more features, gsc functions to Call of Duty 1.1
 A fork of libcod1 :D
 
