@@ -217,7 +217,7 @@ void custom_Com_Init(char *commandLine)
     jump_height = Cvar_Get("jump_height", "39.0", CVAR_ARCHIVE);
     jump_height_air = Cvar_Get("jump_height_air", "58.5", CVAR_ARCHIVE);
     bot_reconnectMode = Cvar_Get("bot_reconnectMode", "0", CVAR_ARCHIVE);
-    sv_allowRcon = Cvar_Get("sv_allowRcon", "0", CVAR_ARCHIVE);
+    sv_allowRcon = Cvar_Get("sv_allowRcon", "1", CVAR_ARCHIVE);
     sv_fastDownload = Cvar_Get("sv_fastDownload", "0", CVAR_ARCHIVE);
     sv_downloadNotifications = Cvar_Get("sv_downloadNotifications", "0", CVAR_ARCHIVE);
     jump_bounceEnable = Cvar_Get("jump_bounceEnable", "0", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
@@ -1318,7 +1318,7 @@ void Info_Print( const char *s ) {
 }
 
 
-static void dumpuser(void) {
+static void custom_SV_DumpUser_f() {
     client_t *cl;
     int clientNum;
 
@@ -1346,15 +1346,18 @@ static void dumpuser(void) {
         return;
     }
 
-    // Print user info
     Com_Printf("userinfo for client %d\n", clientNum);
     Com_Printf("-----------------------\n");
     Info_Print(cl->userinfo);
 }
 
-
-
-
+static void vcl_version(void)
+{
+    printf("\n==============================\n");
+    printf("[VCODLIB] > MADE BY SADMAN\n");
+    printf("[VCODLIB] > 1.0\n");
+    printf("==============================\n");
+}
 
 
 void custom_SV_AddOperatorCommands()
@@ -1366,7 +1369,7 @@ void custom_SV_AddOperatorCommands()
 
     Cmd_AddCommand("ban", ban);
     Cmd_AddCommand("unban", unban);
-    Cmd_AddCommand("v_dumpuser", dumpuser);
+    Cmd_AddCommand("vcl_version", vcl_version);
 
     hook_sv_addoperatorcommands->hook();
 }
@@ -2360,7 +2363,6 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     LookAtKiller = (LookAtKiller_t)dlsym(ret, "LookAtKiller");
 
 
-    printf("========Initializing VCODLIB========");
 
 
     hook_call((int)dlsym(ret, "vmMain") + 0xB0, (int)hook_ClientCommand);
@@ -2423,6 +2425,8 @@ class cCallOfDuty1Pro
 public:
     cCallOfDuty1Pro()
     {
+
+        printf("========Initializing VCODLIB========\n");
         // Don't inherit lib of parent
         unsetenv("LD_PRELOAD");
 
@@ -2436,6 +2440,7 @@ public:
         printf("> [VCODLIB] Compiled for: CoD1 1.1\n");
         printf("> [VCODLIB] Special thanks to raphael and libcod1\n");
         printf("> [VCODLIB] Compiled %s %s using GCC %s\n", __DATE__, __TIME__, __VERSION__);
+    
 
         // Allow to write in executable memory
         mprotect((void *)0x08048000, 0x135000, PROT_READ | PROT_WRITE | PROT_EXEC);
@@ -2457,6 +2462,7 @@ public:
         hook_jmp(0x080716cc, (int)custom_FS_ReferencedPakNames);
         hook_jmp(0x080872ec, (int)custom_SV_ExecuteClientMessage);
 
+        hook_jmp(0x08084cc0, (int)custom_SV_DumpUser_f);
 
         hook_jmp(0x0808cccc, (int)custom_SV_BotUserMove);
 
