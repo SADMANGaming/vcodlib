@@ -53,6 +53,8 @@ cvar_t *jump_height_air;
 cvar_t *jump_bounceEnable;
 cvar_t *sv_fastDownload;
 cvar_t *sv_downloadNotifications;
+cvar_t *sv_spectator_noclip;
+cvar_t *sv_connectmessage;
 
 cHook *hook_clientendframe;
 cHook *hook_com_init;
@@ -221,6 +223,8 @@ void custom_Com_Init(char *commandLine)
     sv_fastDownload = Cvar_Get("sv_fastDownload", "0", CVAR_ARCHIVE);
     sv_downloadNotifications = Cvar_Get("sv_downloadNotifications", "0", CVAR_ARCHIVE);
     jump_bounceEnable = Cvar_Get("jump_bounceEnable", "0", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
+    sv_spectator_noclip = Cvar_Get("sv_spectator_noclip", "0", CVAR_ARCHIVE | CVAR_SERVERINFO);
+    sv_connectmessage = Cvar_Get("sv_connectmessage", "", CVAR_ARCHIVE);
 
     /*
     Force cl_allowDownload on client, otherwise 1.1x can't download to join the server
@@ -2051,6 +2055,7 @@ void hook_SV_GetChallenge(netadr_t from)
 
 void hook_SV_DirectConnect(netadr_t from)
 {
+
     // Prevent using connect as an amplifier
     if (SVC_RateLimitAddress(from, 10, 1000))
     {
@@ -2145,7 +2150,12 @@ void hook_SV_DirectConnect(netadr_t from)
     }
 
     if(unbanned)
-        Cmd_TokenizeString(argBackup.c_str());
+
+    if(sv_connectmessage->string[0]){
+	NET_OutOfBandPrint( NS_SERVER, from, "print\n%s\n", sv_connectmessage->string);
+    }
+
+    Cmd_TokenizeString(argBackup.c_str());
     SV_DirectConnect(from);
 }
 
@@ -2369,11 +2379,14 @@ void* custom_Sys_LoadDll(const char *name, char *fqpath, int (**entryPoint)(int,
     LookAtKiller = (LookAtKiller_t)dlsym(ret, "LookAtKiller");
 
 
+	if(sv_spectator_noclip->integer) {
+        int y7 = (int)dlsym(ret, "SpectatorThink") + 0x123;
+		*(int*)y7 = 0;
+	}
 
 
     hook_call((int)dlsym(ret, "vmMain") + 0xB0, (int)hook_ClientCommand);
     hook_call((int)dlsym(ret, "ClientEndFrame") + 0x311, (int)hook_StuckInClient);
-
 
 
     hook_jmp((int)dlsym(ret, "G_LocalizedStringIndex"), (int)custom_G_LocalizedStringIndex);

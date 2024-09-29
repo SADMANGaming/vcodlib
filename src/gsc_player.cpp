@@ -834,3 +834,4 @@ void gsc_player_ishiddenfromscoreboard(scr_entref_t ref)
     }
     stackPushBool(customPlayerState[id].hiddenFromScoreboard);
 }
+

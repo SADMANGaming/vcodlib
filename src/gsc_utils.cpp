@@ -539,4 +539,126 @@ void gsc_utils_webhookmessage() // TODO: See if needs threading
     
     curl_global_cleanup();
 }
+
+
+size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* response)
+{
+    size_t totalSize = size * nmemb;
+    response->append((char*)contents, totalSize);
+    return totalSize;
+}
+
+/*
+std::string sanitizeResponse(const std::string& input) {
+    std::string output;
+    for (char c : input) {
+        if (c == '{' || c == '}' || c == '"') {
+            output += '\\'; // Escape special characters
+        }
+        output += c;
+    }
+    return output;
+}
+*/
+
+std::string sanitizeResponse(const std::string& input) {
+    std::string output;
+    for (char c : input) {
+        // Keep only printable ASCII characters
+        if (c >= 32 && c <= 126) { 
+            output += c;
+        }
+    }
+    return output;
+}
+
+
+
+void gsc_utils_fetch() 
+{
+    char *url;
+    char *method;
+    char *payload = NULL;
+
+    if (!stackGetParams("ss", &url, &method)) 
+    {
+        stackError("gsc_utils_fetch() one or more arguments are undefined or have a wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    if (strcasecmp(method, "POST") == 0) 
+    {
+        if (!stackGetParams("s", &payload))
+        {
+            stackError("gsc_utils_fetch() payload is required for POST method");
+            stackPushUndefined();
+            return;
+        }
+    }
+
+    CURL *curl;
+    CURLcode responseCode;
+    struct curl_slist *headers = NULL;
+    std::string responseString; 
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    
+    if (curl) 
+    {
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+
+        if (strcasecmp(method, "POST") == 0) 
+        {
+            // post is the worst shit i have implemented :(
+            curl_easy_setopt(curl, CURLOPT_POST, 1L);
+            if (payload != NULL) 
+            {
+                headers = curl_slist_append(headers, "Content-Type: application/json");
+                curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload);
+            }
+        } 
+        else if (strcasecmp(method, "GET") == 0) 
+        {
+            curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+        }
+
+        if (headers != NULL) 
+        {
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        }
+
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseString);
+
+        responseCode = curl_easy_perform(curl);
+        if (responseCode != CURLE_OK) 
+        {
+            Com_Printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(responseCode));
+            stackPushUndefined();
+        } 
+        else 
+        {
+              std::string sanitizedResponse = sanitizeResponse(responseString);
+              stackPushString(sanitizedResponse.c_str());
+        }
+
+        // Cleanup moyai
+        curl_easy_cleanup(curl);
+        if (headers != NULL) 
+        {
+            curl_slist_free_all(headers);
+        }
+    } 
+    else 
+    {
+        Com_Printf("curl_easy_init() failed\n");
+        stackPushUndefined();
+    }
+
+    curl_global_cleanup();
+}
+
+
 #endif

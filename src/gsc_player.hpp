@@ -44,4 +44,5 @@ void gsc_player_lookatkiller(scr_entref_t ref);
 void gsc_player_sethiddenfromscoreboard(scr_entref_t ref);
 void gsc_player_ishiddenfromscoreboard(scr_entref_t ref);
 
+
 #endif

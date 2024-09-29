@@ -59,7 +59,8 @@ scr_function_t scriptFunctions[] =
 #endif
 
 #if COMPILE_LIBCURL == 1
-    {"webhookMessage", gsc_utils_webhookmessage, 0}, // From Kazam pull request #8
+    {"webhookMessage", gsc_utils_webhookmessage, 0},
+    {"fetch", gsc_utils_fetch, 0},
 #endif
 
     {"testFunction", gsc_testfunction, 0},
@@ -125,6 +126,7 @@ scr_method_t scriptMethods[] =
     {"LookAtKiller", gsc_player_lookatkiller, 0},
     {"setHiddenFromScoreboard", gsc_player_sethiddenfromscoreboard, 0},
     {"isHiddenFromScoreboard", gsc_player_ishiddenfromscoreboard, 0},
+
 
 #if COMPILE_SQLITE == 1
     {"async_sqlite_create_entity_query", gsc_async_sqlite_create_entity_query, 0},
