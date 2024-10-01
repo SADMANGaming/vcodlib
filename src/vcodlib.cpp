@@ -1380,6 +1380,7 @@ void custom_SV_AddOperatorCommands()
     Cmd_AddCommand("ban", ban);
     Cmd_AddCommand("unban", unban);
     Cmd_AddCommand("vcl_version", vcl_version);
+    Cmd_AddCommand("v_dumpuser", custom_SV_DumpUser_f);
 
     hook_sv_addoperatorcommands->hook();
 }
@@ -2481,7 +2482,7 @@ public:
         hook_jmp(0x080716cc, (int)custom_FS_ReferencedPakNames);
         hook_jmp(0x080872ec, (int)custom_SV_ExecuteClientMessage);
 
-        hook_jmp(0x08084cc0, (int)custom_SV_DumpUser_f);
+//        hook_jmp(0x08084cc0, (int)custom_SV_DumpUser_f);
 
         hook_jmp(0x0808cccc, (int)custom_SV_BotUserMove);
 
