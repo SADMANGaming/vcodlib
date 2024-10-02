@@ -93,7 +93,7 @@ callback_t callbacks[] =
     { &codecallback_playerkilled, "CodeCallback_PlayerKilled" }, // g_scr_data.gametype.playerkilled
 
     { &codecallback_client_spam, "CodeCallback_CLSpam"},
-    { &codecallback_playercommand, "CodeCallback_PlayerCommand"},
+    { &codecallback_playercommand, "CodeCallback_PlayerCommand"}
 };
 
 customPlayerState_t customPlayerState[MAX_CLIENTS];
@@ -398,40 +398,28 @@ int custom_G_LocalizedStringIndex(const char *string)
     return i;
 }
 
-
-
-
-
-
-
-static int SV_RateMsec(client_t *client, int messageSize)
+static int SV_RateMsec(client_t client, int messageSize)
 {
     int rate;
     int rateMsec;
     
-    if (messageSize > 1500)
-    {
+    if(messageSize > 1500)
         messageSize = 1500;
-    }
-    rate = client->rate;
+
+    rate = client.rate;
     if (sv_maxRate->integer)
     {
-        if (sv_maxRate->integer < 1000)
-        {
-            Cvar_Set("sv_maxRate", "");
-        }
+        if(sv_maxRate->integer < 1000)
+            Cvar_Set("sv_MaxRate", "1000");
 
-        if (sv_maxRate->integer < rate)
-        {
+        if(sv_maxRate->integer < rate)
             rate = sv_maxRate->integer;
-        }
     }
 
-    rateMsec = (1000 * messageSize + (HEADER_RATE_BYTES * 1000)) / rate;
-    /*if (sv_debugRate->integer)
-    {
-        Com_Printf("It would take %ims to send %i bytes to client %s (rate %i)\n", rateMsec, messageSize, client->name, client->rate);
-    }*/
+    rateMsec = ((messageSize + HEADER_RATE_BYTES) * 1000) / rate;
+    if(sv_debugRate->integer)
+        Com_Printf("It would take %ims to send %i bytes to client %s (rate %i)\n", rateMsec, messageSize, client.name, client.rate);
+
     return rateMsec;
 }
 
