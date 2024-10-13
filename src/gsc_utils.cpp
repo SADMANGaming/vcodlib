@@ -1,6 +1,6 @@
 #if COMPILE_LIBCURL == 1
 #include <curl/curl.h>
-#include <string>
+#include "./vendor/sg_json.h" //json stuffs with fetch system 
 #endif
 
 #include <string>
@@ -44,6 +44,35 @@ void gsc_utils_logprintconsole()
 
     stackPushBool(qtrue);
 }
+
+#include <cstring> // For standard C functions
+
+// Custom strlen function to calculate the length of a string
+int custom_strlen(const char *str) {
+    int length = 0;
+    while (str[length] != '\0') {
+        length++;
+    }
+    return length;
+}
+
+void gsc_utils_strlen() {
+    char *input;
+
+    if (!stackGetParams("s", &input)) {
+        stackError("gsc_utils_strlen() argument is undefined or has wrong type");
+        stackPushUndefined();
+        return;
+    }
+
+    int length = 0;
+    while (input[length] != '\0') {
+        length++;
+    }
+
+    stackPushInt(length);
+}
+
 
 void gsc_utils_getsubstr()
 {
@@ -548,39 +577,15 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* res
     return totalSize;
 }
 
-/*
-std::string sanitizeResponse(const std::string& input) {
-    std::string output;
-    for (char c : input) {
-        if (c == '{' || c == '}' || c == '"') {
-            output += '\\'; // Escape special characters
-        }
-        output += c;
-    }
-    return output;
-}
-*/
-
-std::string sanitizeResponse(const std::string& input) {
-    std::string output;
-    for (char c : input) {
-        // Keep only printable ASCII characters
-        if (c >= 32 && c <= 126) { 
-            output += c;
-        }
-    }
-    return output;
-}
-
-
 
 void gsc_utils_fetch() 
 {
     char *url;
     char *method;
     char *payload = NULL;
+    char *jsonKey = NULL;  // Added to fetch specific key from JSON
 
-    if (!stackGetParams("ss", &url, &method)) 
+    if (!stackGetParams("sss", &url, &method, &jsonKey)) 
     {
         stackError("gsc_utils_fetch() one or more arguments are undefined or have a wrong type");
         stackPushUndefined();
@@ -611,7 +616,6 @@ void gsc_utils_fetch()
 
         if (strcasecmp(method, "POST") == 0) 
         {
-            // post is the worst shit i have implemented :(
             curl_easy_setopt(curl, CURLOPT_POST, 1L);
             if (payload != NULL) 
             {
@@ -640,11 +644,28 @@ void gsc_utils_fetch()
         } 
         else 
         {
-              std::string sanitizedResponse = sanitizeResponse(responseString);
-              stackPushString(sanitizedResponse.c_str());
+            Json jsonParser;
+            if (jsonParser.parse(responseString)) 
+            {
+                if (jsonParser.contains(jsonKey)) 
+                {
+                    std::string value = jsonParser.getString(jsonKey);
+                    stackPushString(value.c_str());
+                } 
+                else 
+                {
+                    Com_Printf("Key %s not found in the JSON response\n", jsonKey);
+                    stackPushUndefined();
+                }
+            } 
+            else 
+            {
+                Com_Printf("Failed to parse JSON response\n");
+                stackPushUndefined();
+            }
         }
 
-        // Cleanup moyai
+        // Cleanup
         curl_easy_cleanup(curl);
         if (headers != NULL) 
         {
@@ -659,6 +680,7 @@ void gsc_utils_fetch()
 
     curl_global_cleanup();
 }
+
 
 
 #endif

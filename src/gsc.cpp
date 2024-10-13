@@ -35,6 +35,7 @@ scr_function_t scriptFunctions[] =
     {"unban", gsc_utils_unban, 0},
     {"StringToIString", gsc_utils_stringtoistring, 0},
     {"IStringToString", gsc_utils_istringtostring, 0},
+    {"strlen", gsc_utils_strlen, 0},
 
 
     // Weapons
@@ -122,11 +123,11 @@ scr_method_t scriptMethods[] =
 	{"getLastConnectTime", gsc_player_getlastconnecttime, 0},
 	{"isBot", gsc_player_isbot, 0},
     {"playScriptAnimation", gsc_player_playscriptanimation, 0},
-//    {"playFxForPlayer", gsc_player_playfxforplayer, 0},
     {"LookAtKiller", gsc_player_lookatkiller, 0},
     {"setHiddenFromScoreboard", gsc_player_sethiddenfromscoreboard, 0},
     {"isHiddenFromScoreboard", gsc_player_ishiddenfromscoreboard, 0},
-
+    {"renameClient", gsc_player_renameclient, 0},
+    {"playFxForPlayer", gsc_player_playfxforplayer, 0},
 
 #if COMPILE_SQLITE == 1
     {"async_sqlite_create_entity_query", gsc_async_sqlite_create_entity_query, 0},

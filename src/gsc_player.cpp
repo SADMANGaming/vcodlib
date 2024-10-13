@@ -674,7 +674,7 @@ void gsc_player_playscriptanimation(scr_entref_t ref)
     gentity_t *entity = &g_entities[id];
     stackPushInt(BG_AnimScriptEvent(&entity->client->ps, (scriptAnimEventTypes_t)scriptAnimEventType, isContinue, force));
 }
-/*
+
 void gsc_player_playfxforplayer(scr_entref_t ref)
 {
 	int id = ref.entnum;
@@ -718,12 +718,17 @@ void gsc_player_playfxforplayer(scr_entref_t ref)
 	
 	if ( id >= MAX_CLIENTS )
 	{
-		stackError("gsc_utils_playfxforplayer() entity %i is not a player", id);
+		stackError("gsc_player_playfxforplayer() entity %i is not a player", id);
 		stackPushUndefined();
 		return;
 	}
 
 	gentity_t *ent = G_TempEntity(origin, EV_PLAY_FX);
+    if(!ent){
+        printf("gsc_player_playfxforplayer() cannot create entity");
+        return;
+    }
+    printf("gsc_player_playfxforplayer() Entity created, index: %d\n", index);
 	ent->s.eventParm = index & 0xff;
 	ent->s.otherEntityNum = id + 1;
 	if ( args == 2 )
@@ -769,7 +774,7 @@ void gsc_player_playfxforplayer(scr_entref_t ref)
 
 	stackPushBool(qtrue);
 }
-*/
+
 void gsc_player_lookatkiller(scr_entref_t ref)
 {
 	int id = ref.entnum;
@@ -834,4 +839,35 @@ void gsc_player_ishiddenfromscoreboard(scr_entref_t ref)
     }
     stackPushBool(customPlayerState[id].hiddenFromScoreboard);
 }
+void gsc_player_renameclient(scr_entref_t ref)
+{
+	int id = ref.entnum;
+	char *name;
 
+	if ( !stackGetParams("s", &name) )
+	{
+		stackError("gsc_player_renameclient() argument is undefined or has a wrong type");
+		stackPushUndefined();
+		return;
+	}
+
+	if ( strlen(name) > 31 )
+	{
+		stackError("gsc_player_renameclient() player name is longer than 31 characters");
+		stackPushUndefined();
+		return;
+	}
+
+	if ( id >= MAX_CLIENTS )
+	{
+		stackError("gsc_player_renameclient() entity %i is not a player", id);
+		stackPushUndefined();
+		return;
+	}
+
+	client_t *client = &svs.clients[id];
+	Info_SetValueForKey(client->userinfo, "name", name);
+	strcpy(client->name, name);
+
+	stackPushBool(qtrue);
+}

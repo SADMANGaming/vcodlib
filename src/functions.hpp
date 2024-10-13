@@ -34,7 +34,12 @@ extern vectoangles_t vectoangles;
 typedef void (*LookAtKiller_t)(gentity_t *self, gentity_t *inflictor, gentity_t *attacker);
 extern LookAtKiller_t LookAtKiller;
 
+//// Huff
+typedef void (*Huff_Decompress_t)(msg_t *mbuf, int offset);
+static const Huff_Decompress_t Huff_Decompress = (Huff_Decompress_t)0x08071f7c;
 
+typedef void (*Huff_offsetReceive_t)(node_t *node, int *ch, byte *fin, int *offset);
+static const Huff_offsetReceive_t Huff_offsetReceive = (Huff_offsetReceive_t)0x080724fc; 
 
 // trap
 typedef void (*trap_Argv_t)(int arg, char *buffer, int bufferLength);
@@ -438,8 +443,7 @@ static const UI_GetMapRotationToken_t UI_GetMapRotationToken = (UI_GetMapRotatio
 typedef void (*Cbuf_ExecuteText_t)(cbufExec_t exec_when, const char* text);
 static const Cbuf_ExecuteText_t Cbuf_ExecuteText = (Cbuf_ExecuteText_t)0x0805a8a0;
 
-typedef void (*Huff_Decompress_t)(msg_t *mbuf, int offset);
-static const Huff_Decompress_t Huff_Decompress = (Huff_Decompress_t)0x08071f7c;
+
 
 typedef int (*Jump_Check_t)();
 

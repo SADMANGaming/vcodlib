@@ -55,6 +55,7 @@ cvar_t *sv_fastDownload;
 cvar_t *sv_downloadNotifications;
 cvar_t *sv_spectator_noclip;
 cvar_t *sv_connectmessage;
+cvar_t *sv_debugRate;
 
 cHook *hook_clientendframe;
 cHook *hook_com_init;
@@ -225,6 +226,7 @@ void custom_Com_Init(char *commandLine)
     jump_bounceEnable = Cvar_Get("jump_bounceEnable", "0", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
     sv_spectator_noclip = Cvar_Get("sv_spectator_noclip", "0", CVAR_ARCHIVE | CVAR_SERVERINFO);
     sv_connectmessage = Cvar_Get("sv_connectmessage", "", CVAR_ARCHIVE);
+    sv_debugRate = Cvar_Get("sv_debugRate", "0", CVAR_ARCHIVE);
 
     /*
     Force cl_allowDownload on client, otherwise 1.1x can't download to join the server
@@ -449,7 +451,7 @@ void custom_SV_SendClientMessages(void)
             {
                 while (cl->netchan.unsentFragments)
                 {
-                    cl->nextSnapshotTime = svs.time + SV_RateMsec(cl, cl->netchan.unsentLength - cl->netchan.unsentFragmentStart);
+                    cl->nextSnapshotTime = svs.time + SV_RateMsec(*cl, cl->netchan.unsentLength - cl->netchan.unsentFragmentStart);
                     SV_Netchan_TransmitNextFragment(&cl->netchan);
                 }
                 SV_SendClientSnapshot(cl);
@@ -459,7 +461,7 @@ void custom_SV_SendClientMessages(void)
         {
             if (cl->netchan.unsentFragments)
             {
-                cl->nextSnapshotTime = svs.time + SV_RateMsec(cl, cl->netchan.unsentLength - cl->netchan.unsentFragmentStart);
+                cl->nextSnapshotTime = svs.time + SV_RateMsec(*cl, cl->netchan.unsentLength - cl->netchan.unsentFragmentStart);
                 SV_Netchan_TransmitNextFragment(&cl->netchan);
                 continue;
             }
@@ -519,21 +521,6 @@ void custom_SV_SendClientMessages(void)
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void custom_SV_SendMessageToClient(msg_t *msg, client_t *client)
 {
     byte data[MAX_MSGLEN];
@@ -551,13 +538,14 @@ void custom_SV_SendMessageToClient(msg_t *msg, client_t *client)
     client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = -1;
     SV_Netchan_Transmit(client, data, compressedSize);
 
-    if (client->netchan.remoteAddress.type == NA_LOOPBACK || Sys_IsLANAddress(client->netchan.remoteAddress) || (sv_fastDownload->integer && client->download))
+    if (client->netchan.remoteAddress.type == NA_LOOPBACK || Sys_IsLANAddress(client->netchan.remoteAddress)
+        || (sv_fastDownload->integer && client->download))
     {
         client->nextSnapshotTime = svs.time - 1;
         return;
     }
 
-    rateMsec = SV_RateMsec(client, compressedSize);
+    rateMsec = SV_RateMsec(*client, compressedSize);
     if (rateMsec < client->snapshotMsec)
     {
         rateMsec = client->snapshotMsec;
@@ -577,16 +565,6 @@ void custom_SV_SendMessageToClient(msg_t *msg, client_t *client)
     }
     sv.bpsTotalBytes += compressedSize;
 }
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1413,9 +1391,41 @@ bool shouldServeFile(const char *requestedFilePath)
     return false;
 }
 
+
+
+
+
+
+int custom_MSG_ReadBitsCompress(const byte* input, byte* outputBuf, int readsize, int outputBufSize)
+{
+    readsize = readsize * 8;
+    byte *outptr = outputBuf;
+
+    int get;
+    int offset;
+    int i;
+
+    if(readsize <= 0)
+        return 0;
+
+    for (offset = 0, i = 0; offset < readsize && i < outputBufSize; i++)
+    {
+        Huff_offsetReceive(msgHuff.decompressor.tree, &get, (byte*)input, &offset); // See https://github.com/callofduty4x/CoD4x_Server/pull/396
+        *outptr = (byte)get;
+        outptr++;
+    }
+
+    return i;
+}
+
 void custom_SV_BeginDownload_f(client_t *cl)
 {
-    // Patch q3dirtrav
+    //// [exploit patch] q3dirtrav
+    /* See:
+    - https://aluigi.altervista.org/video/q3dirtrav.avi
+    - https://aluigi.altervista.org/poc/q3dirtrav.zip
+    - https://oldforum.aluigi.org/post3479.html#p3479
+    */
     int args = Cmd_Argc();
     if (args > 1)
     {
@@ -1423,15 +1433,20 @@ void custom_SV_BeginDownload_f(client_t *cl)
         if (!shouldServeFile(arg1))
         {
             char ip[16];
-            snprintf(ip, sizeof(ip), "%d.%d.%d.%d", cl->netchan.remoteAddress.ip[0], cl->netchan.remoteAddress.ip[1], cl->netchan.remoteAddress.ip[2], cl->netchan.remoteAddress.ip[3]);
+            snprintf(ip, sizeof(ip), "%d.%d.%d.%d",
+                cl->netchan.remoteAddress.ip[0],
+                cl->netchan.remoteAddress.ip[1],
+                cl->netchan.remoteAddress.ip[2],
+                cl->netchan.remoteAddress.ip[3]);
             Com_Printf("WARNING: %s (%s) tried to download %s.\n", cl->name, ip, arg1);
             return;
         }
     }
+    ////
 
     hook_sv_begindownload_f->unhook();
     void (*SV_BeginDownload_f)(client_t *cl);
-    *(int *)&SV_BeginDownload_f = hook_sv_begindownload_f->from;
+    *(int*)&SV_BeginDownload_f = hook_sv_begindownload_f->from;
     SV_BeginDownload_f(cl);
     hook_sv_begindownload_f->hook();
 }
@@ -1507,9 +1522,11 @@ void custom_SV_WriteDownloadToClient(client_t *cl, msg_t *msg)
         if (sv_fastDownload->integer)
             blksize = MAX_DOWNLOAD_BLKSIZE_FAST;
         
-        if(!cl->downloadBlocks[curindex])
-            cl->downloadBlocks[curindex] = (unsigned char *)Z_MallocInternal(MAX_DOWNLOAD_BLKSIZE_FAST); // Not passing blksize to prevent issue in case the block size alignment changes during runtime.
-
+        if (!cl->downloadBlocks[curindex])
+        {
+            // See https://github.com/ibuddieat/zk_libcod/blob/dfdd4ef17508ff8ffbaacb0353a6b736a9707cba/code/libcod.cpp#L3761
+            cl->downloadBlocks[curindex] = (unsigned char *)Z_MallocInternal(MAX_DOWNLOAD_BLKSIZE_FAST);
+        }
         cl->downloadBlockSize[curindex] = FS_Read(cl->downloadBlocks[curindex], blksize, cl->download);
 
         if (cl->downloadBlockSize[curindex] < 0)
@@ -1568,21 +1585,35 @@ void custom_SV_WriteDownloadToClient(client_t *cl, msg_t *msg)
 
 void custom_SV_ExecuteClientMessage(client_t *cl, msg_t *msg)
 {
-    byte msgBuf[MAX_MSGLEN];
+    byte outputBuf[MAX_MSGLEN];
     msg_t decompressMsg;
     int c;
 
-    MSG_Init(&decompressMsg, msgBuf, sizeof(msgBuf));
-    decompressMsg.cursize = MSG_ReadBitsCompress(&msg->data[msg->readcount], msgBuf, msg->cursize - msg->readcount);
+    MSG_Init(&decompressMsg, outputBuf, sizeof(outputBuf));
+
+    //// [exploit patch] CVE-2018-10718 // UNTESTED
+    // See https://github.com/momo5502/cod-exploits/tree/master/huffman
+    decompressMsg.cursize = custom_MSG_ReadBitsCompress(msg->data + msg->readcount, outputBuf, msg->cursize - msg->readcount, decompressMsg.maxsize);
+    if (decompressMsg.cursize == decompressMsg.maxsize)
+    {
+        SV_DropClient(cl, "SV_ExecuteClientMessage: Client sent oversize message");
+        return;
+    }
+    ////
     
+    /*
+    Check "nextdl" to prevent client getting stuck downloading after a map_restart occurred.
+    See https://github.com/id-Software/Quake-III-Arena/blob/dbe4ddb10315479fc00086f08e25d968b4b43c49/code/server/sv_client.c#L1485
+    */
     if ((cl->serverId == sv_serverId_value || cl->downloadName[0])
         || (!cl->downloadName[0] && strstr(cl->lastClientCommandString, "nextdl")))
     {
-        do {
+        do
+        {
             c = MSG_ReadBits(&decompressMsg, 2);
             if (c == clc_EOF || c != clc_clientCommand)
             {
-                if(sv_pure->integer && cl->pureAuthentic == 2)
+                if (sv_pure->integer && cl->pureAuthentic == 2)
                 {
                     cl->nextSnapshotTime = -1;
                     SV_DropClient(cl, "EXE_UNPURECLIENTDETECTED");
@@ -1591,31 +1622,22 @@ void custom_SV_ExecuteClientMessage(client_t *cl, msg_t *msg)
                     cl->state = CS_ZOMBIE;
                 }
                 if(c == clc_move)
-                {
                     SV_UserMove(cl, &decompressMsg, 1);
-                }
                 else if(c == clc_moveNoDelta)
-                {
                     SV_UserMove(cl, &decompressMsg, 0);
-                }
                 else if(c != clc_EOF)
-                {
                     Com_Printf("WARNING: bad command byte %i for client %i\n", c, cl - svs.clients);
-                }
                 return;
             }
 
-            if (!SV_ClientCommand(cl, &decompressMsg))
+            if(!SV_ClientCommand(cl, &decompressMsg))
                 return;
-
         } while (cl->state != CS_ZOMBIE);
     }
     else if ((cl->serverId & 0xF0) == (sv_serverId_value & 0xF0))
     {
-        if (cl->state == CS_PRIMED)
-        {
+        if(cl->state == CS_PRIMED)
             SV_ClientEnterWorld(cl, &cl->lastUsercmd);
-        }
     }
     else
     {
@@ -1626,6 +1648,16 @@ void custom_SV_ExecuteClientMessage(client_t *cl, msg_t *msg)
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
 
 char *custom_va(const char *format, ...)
 {

@@ -341,3 +341,31 @@ void gsc_bots_setwalkvalues(scr_entref_t ref)
 
     stackPushBool(qtrue);
 }
+
+void gsc_bots_lookatenemy(scr_entref_t ref) {
+    int botId = ref.entnum;
+    gentity_t *bot = &g_entities[botId];
+    gentity_t *enemy;
+
+    if (!stackGetParams("e", &enemy) || !enemy) {
+        stackPushBool(qfalse);
+        stackError("gsc_bots_lookatenemy() one or more arguments is undefined");
+        return;
+    }
+
+    vec3_t botPos, enemyPos, direction, angles;
+
+    VectorCopy(bot->r.currentOrigin, botPos);
+    VectorCopy(enemy->r.currentOrigin, enemyPos);
+
+    direction[0] = enemyPos[0] - botPos[0];
+    direction[1] = enemyPos[1] - botPos[1];
+    direction[2] = enemyPos[2] - botPos[2];
+
+    vectoangles(direction, angles);
+
+    VectorCopy(angles, bot->client->ps.viewangles);
+    VectorCopy(angles, bot->s.angles2); 
+
+    stackPushBool(qtrue);
+}

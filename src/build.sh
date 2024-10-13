@@ -138,6 +138,9 @@ $cc $debug $options $constants -c vcodlib.cpp -o objects/vcodlib.opp
 echo "##### COMPILE QVSNPRINTF.C #####"
 $cc $debug $options $constants -c vendor/qvsnprintf.c -o objects/qvsnprintf.opp
 
+echo "##### COMPILE SG_JSON.CPP #####"
+$cc $debug $options $constants -c vendor/sg_json.cpp -o objects/sg_json.opp
+
 echo "##### LINK    vcodlib.so #####"
 objects="$(ls objects/*.opp)"
 $cc -m32 -shared -L/lib32 -o ../bin/vcodlib.so -ldl $objects -lpthread $sqlite_link $libcurl_link

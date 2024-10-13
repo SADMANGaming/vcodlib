@@ -14,6 +14,7 @@
 #define VectorCopy( a, b )          ( ( b )[0] = ( a )[0],( b )[1] = ( a )[1],( b )[2] = ( a )[2] )
 #define VectorScale( v, s, o )      ( ( o )[0] = ( v )[0] * ( s ),( o )[1] = ( v )[1] * ( s ),( o )[2] = ( v )[2] * ( s ) )
 #define VectorCross( a, b, c )      ( ( c )[0] = ( a )[1] * ( b )[2] - ( a )[2] * ( b )[1],( c )[1] = ( a )[2] * ( b )[0] - ( a )[0] * ( b )[2],( c )[2] = ( a )[0] * ( b )[1] - ( a )[1] * ( b )[0] )
+#define VectorSubtract( a, b, c )   ( ( c )[0] = ( a )[0] - ( b )[0],( c )[1] = ( a )[1] - ( b )[1],( c )[2] = ( a )[2] - ( b )[2] )
 
 
 #define BIG_INFO_STRING             0x2000
@@ -79,6 +80,7 @@
 #define MAX_BPS_WINDOW              20
 #define MAX_MASTER_SERVERS          5
 #define MAX_DOWNLOAD_BLKSIZE_FAST   0x2000
+#define HMAX 256
 
 
 /*
@@ -992,6 +994,35 @@ typedef struct
     // ...
 } stringIndex_t;
 
+typedef struct nodetype
+{
+    struct  nodetype *left, *right, *parent;
+    struct  nodetype *next, *prev;
+    struct  nodetype **head;
+    int weight;
+    int symbol;
+} node_t;
+
+
+typedef struct
+{
+    int blocNode;
+    int blocPtrs;
+    node_t* tree;
+    node_t* lhead;
+    node_t* ltail;
+    node_t* loc[HMAX + 1];
+    node_t** freelist;
+    node_t nodeList[768];
+    node_t* nodePtrs[768];
+} huff_t;
+
+typedef struct
+{
+    huff_t compressor;
+    huff_t decompressor;
+} huffman_t;
+
 
 extern gentity_t *g_entities;
 //extern gclient_t *g_clients;
@@ -1004,6 +1035,9 @@ static const int sv_offset = 0x08355260;
 static const int svs_offset = 0x083b67a0;
 static const int varpub_offset = 0x082f17d8;
 static const int vmpub_offset = 0x082f57e0;
+static const int msgHuff_offset = 0x0813e740;
+
+
 
 #define com_frameTime (*((int*)( com_frameTime_offset )))
 #define fs_searchpaths (*((searchpath_t**)( fs_searchpaths_offset )))
@@ -1012,6 +1046,7 @@ static const int vmpub_offset = 0x082f57e0;
 #define sv (*((server_t*)( sv_offset )))
 #define sv_serverId_value (*((int*)( sv_serverId_value_offset )))
 #define svs (*((serverStatic_t*)( svs_offset )))
+#define msgHuff (*((huffman_t*)(msgHuff_offset)))
 
 // Check for critical structure sizes and fail if not match
 #if __GNUC__ >= 6
