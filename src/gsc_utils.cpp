@@ -580,6 +580,8 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* res
 
 void gsc_utils_fetch() 
 {
+    // thank you raph, kazam for the webhookmessage();
+    // thank you gpt for the help with post
     char *url;
     char *method;
     char *payload = NULL;
